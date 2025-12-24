@@ -1,0 +1,941 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<script src="static/common.js"></script>
+<title>FRVM</title>
+<style>
+html, body { margin:0; padding:0; width:100%; height:100%; font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Mono', 'Droid Sans Mono', 'Source Code Pro', monospace; }
+body { background-size:cover; background-position:center; background-repeat:no-repeat; overflow:hidden; }
+
+#gridContainer{
+  width:100%; height:100%;
+  display:grid;
+  grid-template-columns:repeat(3,1fr);
+  grid-template-rows:repeat(3,1fr);
+  place-items:center;
+  opacity: 0;
+  transition: opacity 0.5s ease;
+}
+#gridContainer.visible { opacity: 1; }
+
+.svg-box{
+  width:100%;
+  height:100%;
+  max-width: calc(100vw/5);
+  max-height: calc(100vh/5);
+}
+.svg-box a{
+  display:block; max-width:90%; max-height:90%; transition: transform .3s ease;
+}
+.svg-box a:hover{ transform: scale(1.10); }
+.svg-box a svg{
+  width:auto;
+  height:100%;
+  max-width:100%;
+}
+
+@media (orientation: landscape){ body{background-image:var(--bg-landscape, url('/data/landscape/background.jpg'));} }
+@media (orientation: portrait){ body{background-image:var(--bg-portrait, url('/data/portrait/background.jpg'));} }
+
+/* Login Modal */
+.modal{ position:fixed; inset:0; background:rgba(0,0,0,.85); display:flex; justify-content:center; align-items:center; z-index:1000;}
+.modal.hidden { display: none; }
+.modal-content{ 
+  background: rgba(30,30,30,0.95); 
+  border-radius:16px; 
+  padding:30px 40px; 
+  max-width:360px; 
+  text-align:center; 
+  animation:pop .3s ease;
+  border: 1px solid var(--primary-color, #ff69b4);
+  box-shadow: 0 0 40px rgba(255,105,180,0.3);
+}
+.modal-content h2 {
+  margin: 0 0 8px 0;
+  color: var(--primary-color, #ff69b4);
+  font-size: 1.8em;
+}
+.modal-content .subtitle {
+  color: #888;
+  margin-bottom: 24px;
+  font-size: 0.9em;
+}
+.form-group {
+  margin-bottom: 16px;
+  text-align: left;
+}
+.form-group label {
+  display: block;
+  color: #aaa;
+  margin-bottom: 6px;
+  font-size: 0.85em;
+}
+.form-group input {
+  width: 100%;
+  padding: 12px;
+  border: 1px solid #444;
+  border-radius: 8px;
+  background: #222;
+  color: #fff;
+  font-size: 1em;
+  box-sizing: border-box;
+  transition: border-color 0.2s;
+}
+.form-group input:focus {
+  outline: none;
+  border-color: var(--primary-color, #ff69b4);
+}
+.login-btn {
+  width: 100%;
+  padding: 14px;
+  border: none;
+  border-radius: 8px;
+  background: var(--primary-color, #ff69b4);
+  color: #000;
+  font-size: 1.1em;
+  font-weight: bold;
+  cursor: pointer;
+  margin-top: 8px;
+  transition: transform 0.2s, opacity 0.2s;
+}
+.login-btn:hover { transform: scale(1.02); }
+.login-btn:active { transform: scale(0.98); }
+.login-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.guest-btn {
+  width: 100%;
+  padding: 12px;
+  border: 1px solid #555;
+  border-radius: 8px;
+  background: transparent;
+  color: #888;
+  font-size: 0.95em;
+  cursor: pointer;
+  margin-top: 12px;
+  transition: all 0.2s;
+}
+.guest-btn:hover {
+  border-color: #888;
+  color: #aaa;
+}
+.guest-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.guest-btn .limitation {
+  font-size: 0.8em;
+  color: #666;
+  display: block;
+  margin-top: 4px;
+}
+.error-msg {
+  color: #f44;
+  margin-top: 12px;
+  font-size: 0.9em;
+  min-height: 1.2em;
+}
+.user-info {
+  position: fixed;
+  top: 10px;
+  right: 10px;
+  color: var(--primary-color, #ff69b4);
+  font-size: 0.85em;
+  background: rgba(0,0,0,0.6);
+  padding: 6px 12px;
+  border-radius: 20px;
+  z-index: 100;
+}
+.user-info .logout-btn {
+  background: none;
+  border: none;
+  color: #888;
+  cursor: pointer;
+  margin-left: 8px;
+  font-size: 0.85em;
+}
+.user-info .logout-btn:hover { color: #fff; }
+
+/* Search Panel */
+.search-panel {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: rgba(20, 20, 20, 0.95);
+  padding: 12px 16px;
+  z-index: 200;
+  transform: translateY(100%);
+  transition: transform 0.3s ease;
+  border-top: 1px solid var(--primary-color, #ff69b4);
+}
+.search-panel.visible {
+  transform: translateY(0);
+}
+.search-input-row {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+.search-input {
+  flex: 1;
+  padding: 12px;
+  border: 1px solid #444;
+  border-radius: 8px;
+  background: #222;
+  color: #fff;
+  font-size: 1.1em;
+}
+.search-input:focus {
+  outline: none;
+  border-color: var(--primary-color, #ff69b4);
+}
+.search-btn {
+  padding: 12px 20px;
+  border: none;
+  border-radius: 8px;
+  background: var(--primary-color, #ff69b4);
+  color: #000;
+  font-weight: bold;
+  cursor: pointer;
+}
+.search-btn:hover { opacity: 0.9; }
+.emoji-palette {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: center;
+}
+.emoji-btn {
+  font-size: 1.6em;
+  padding: 6px 10px;
+  background: rgba(50, 50, 50, 0.8);
+  border: 1px solid #444;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s;
+  position: relative;
+}
+.emoji-btn:hover {
+  background: rgba(80, 80, 80, 0.8);
+  transform: scale(1.1);
+}
+.emoji-btn:active { transform: scale(0.95); }
+.emoji-btn[title]:hover::after {
+  content: attr(title);
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #333;
+  color: #fff;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 0.5em;
+  white-space: nowrap;
+  margin-bottom: 4px;
+}
+
+/* Compact emoji palette when too many lines */
+.emoji-palette.compact .emoji-btn {
+  font-size: 1.3em;
+  padding: 4px 7px;
+}
+.emoji-palette.very-compact .emoji-btn {
+  font-size: 1.1em;
+  padding: 3px 5px;
+}
+.emoji-palette.ultra-compact .emoji-btn {
+  font-size: 0.95em;
+  padding: 2px 4px;
+}
+
+.operator-btns {
+  display: flex;
+  gap: 6px;
+  margin-left: auto;
+}
+.op-btn {
+  padding: 8px 14px;
+  background: #333;
+  border: 1px solid #555;
+  border-radius: 6px;
+  color: #aaa;
+  font-family: monospace;
+  font-size: 1em;
+  cursor: pointer;
+}
+.op-btn:hover { background: #444; color: #fff; }
+.search-toggle {
+  position: fixed;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(0,0,0,0.6);
+  border: 1px solid var(--primary-color, #ff69b4);
+  color: var(--primary-color, #ff69b4);
+  padding: 10px 20px;
+  border-radius: 25px;
+  cursor: pointer;
+  font-size: 1em;
+  z-index: 100;
+  transition: all 0.2s;
+}
+.search-toggle:hover {
+  background: var(--primary-color, #ff69b4);
+  color: #000;
+}
+.search-toggle.hidden { display: none; }
+
+/* Video Counter */
+.video-counter {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+  margin-top: 10px;
+  font-size: 0.9em;
+  color: #888;
+}
+.video-counter .count-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.video-counter .count-item .icon { font-size: 1.1em; }
+.video-counter .count-item .num { color: var(--primary-color, #ff69b4); font-weight: bold; }
+.video-counter.loading { opacity: 0.5; }
+
+/* Preset Selector */
+.preset-row {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 10px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+.preset-btn {
+  padding: 6px 12px;
+  background: #2a2a2a;
+  border: 1px solid #444;
+  border-radius: 16px;
+  color: #aaa;
+  font-size: 0.85em;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.preset-btn:hover {
+  background: #3a3a3a;
+  color: #fff;
+  border-color: var(--primary-color, #ff69b4);
+}
+.preset-btn.active {
+  background: var(--primary-color, #ff69b4);
+  color: #000;
+  border-color: var(--primary-color, #ff69b4);
+}
+
+/* Category tooltip overlay for mobile */
+.category-tooltip-overlay {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: rgba(0, 0, 0, 0.9);
+  color: #fff;
+  padding: 16px 24px;
+  border-radius: 12px;
+  font-size: 1.2em;
+  z-index: 1000;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.2s;
+  text-align: center;
+  border: 1px solid var(--primary-color, #ff69b4);
+}
+.category-tooltip-overlay.visible {
+  opacity: 1;
+}
+.category-tooltip-overlay .emoji {
+  font-size: 2em;
+  display: block;
+  margin-bottom: 8px;
+}
+
+/* Responsive styles */
+@media (max-width: 600px) {
+  .search-panel {
+    padding: 8px 10px;
+  }
+  .search-input-row {
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+  .search-input {
+    min-width: 0;
+    flex: 1 1 100%;
+    order: 1;
+    padding: 10px;
+    font-size: 1em;
+  }
+  .operator-btns {
+    order: 3;
+    flex: 1;
+    justify-content: center;
+    margin-left: 0;
+  }
+  /* Hide less essential operator buttons on small screens */
+  .operator-btns .op-btn.secondary {
+    display: none;
+  }
+  .op-btn {
+    padding: 8px 10px;
+    font-size: 0.9em;
+  }
+  .search-btn {
+    order: 2;
+    padding: 10px 16px;
+  }
+  .emoji-palette {
+    gap: 4px;
+  }
+  .video-counter {
+    flex-wrap: wrap;
+    gap: 6px;
+    font-size: 0.8em;
+  }
+  .preset-row {
+    gap: 4px;
+  }
+  .preset-btn {
+    padding: 4px 8px;
+    font-size: 0.75em;
+  }
+}
+
+@media (max-width: 400px) {
+  .operator-btns {
+    display: none;
+  }
+  .search-input {
+    flex: 1 1 70%;
+  }
+  .search-btn {
+    flex: 0 0 auto;
+  }
+}
+
+@keyframes pop{ from{transform:scale(.8);opacity:0} to{transform:scale(1);opacity:1} }
+</style>
+</head>
+<body>
+
+<div id="gridContainer"></div>
+
+<div class="user-info" id="userInfo" style="display:none;">
+  <span id="usernameDisplay"></span>
+  <button class="logout-btn" onclick="logout()">logout</button>
+</div>
+
+<!-- Search Toggle Button -->
+<button class="search-toggle hidden" id="searchToggle" onclick="toggleSearchPanel()">🔍 Filter</button>
+
+<!-- Search Panel -->
+<div class="search-panel" id="searchPanel">
+  <div class="preset-row" id="presetRow"></div>
+  <div class="search-input-row">
+    <input type="text" class="search-input" id="searchExpr" placeholder="" autocomplete="off">
+    <div class="operator-btns">
+      <button class="op-btn" onclick="insertOp('.')">. AND</button>
+      <button class="op-btn" onclick="insertOp('+')">+ OR</button>
+      <button class="op-btn" onclick="insertOp('!')">! NOT</button>
+      <button class="op-btn secondary" onclick="insertOp('(')">(</button>
+      <button class="op-btn secondary" onclick="insertOp(')')">)</button>
+      <button class="op-btn secondary" onclick="insertOp('?')">? UNSET</button>
+    </div>
+    <button class="search-btn" onclick="applySearch()">Go</button>
+  </div>
+  <div class="emoji-palette" id="emojiPalette"></div>
+  <div class="video-counter" id="videoCounter">
+    <span class="count-item"><span class="icon">📱</span> Portrait: <span class="num" id="countPortrait">-</span></span>
+    <span class="count-item"><span class="icon">⬛</span> Square: <span class="num" id="countSquare">-</span></span>
+    <span class="count-item"><span class="icon">🖥️</span> Landscape: <span class="num" id="countLandscape">-</span></span>
+    <span class="count-item">Total: <span class="num" id="countTotal">-</span></span>
+  </div>
+</div>
+
+<!-- Login Modal -->
+<div class="modal" id="loginModal">
+  <div class="modal-content">
+    <h2 id="appTitle">🤫</h2>
+    <p class="subtitle">Please sign in to continue</p>
+    <form id="loginForm" onsubmit="handleLogin(event)">
+      <div class="form-group">
+        <label for="username">Username</label>
+        <input type="text" id="username" name="username" autocomplete="username" required>
+      </div>
+      <div class="form-group">
+        <label for="password">Password</label>
+        <input type="password" id="password" name="password" autocomplete="current-password" required>
+      </div>
+      <button type="submit" class="login-btn" id="loginBtn">Sign In</button>
+      <div class="error-msg" id="errorMsg"></div>
+    </form>
+    <button class="guest-btn" id="guestBtn" style="display:none;" onclick="handleGuest()">
+      Continue as Guest
+      <span class="limitation">with limited content</span>
+    </button>
+  </div>
+</div>
+
+<script>
+// Config loaded from server
+let appConfig = null;
+let currentUser = null;
+
+// Base path for all API calls and links (empty string = root, or "/subpath")
+function basePath() {
+  return appConfig?.basePath || '';
+}
+
+// Load config and check auth on startup
+async function init() {
+  // Load config first (try relative path, then absolute)
+  try {
+    // First try to detect basePath from current URL
+    const pathParts = window.location.pathname.split('/').filter(p => p);
+    let configUrl = '/api/config';
+    
+    // Try current path first, then root
+    for (let i = pathParts.length; i >= 0; i--) {
+      const tryPath = '/' + pathParts.slice(0, i).join('/');
+      const tryUrl = (tryPath === '/' ? '' : tryPath) + '/api/config';
+      try {
+        const res = await fetch(tryUrl);
+        if (res.ok) {
+          appConfig = await res.json();
+          // If basePath not in config, infer from working URL
+          if (!appConfig.basePath && tryPath !== '/') {
+            appConfig.basePath = tryPath;
+          }
+          break;
+        }
+      } catch(e) {}
+    }
+    
+    if (!appConfig) throw new Error('Could not load config');
+    
+    // Apply theme
+    document.body.style.setProperty('--primary-color', appConfig.primaryColor || '#ff69b4');
+    document.title = appConfig.title || 'FRVM';
+    document.getElementById('appTitle').textContent = appConfig.title || '🤫';
+    
+    // Show guest button if enabled
+    if (appConfig.guestEnabled) {
+      document.getElementById('guestBtn').style.display = 'block';
+    }
+  } catch(e) {
+    console.error('Failed to load config:', e);
+  }
+  
+  // Check if already authenticated
+  try {
+    const res = await fetch(basePath() + '/api/me');
+    if (res.ok) {
+      currentUser = await res.json();
+      showMainUI();
+    } else {
+      showLogin();
+    }
+  } catch(e) {
+    showLogin();
+  }
+}
+
+function applyBackgrounds(role) {
+  // Apply background images based on user role
+  const backgrounds = appConfig?.backgrounds || {};
+  const roleBackgrounds = backgrounds[role] || backgrounds.user || backgrounds;
+  
+  // Support both new format (by role) and legacy format
+  const landscape = roleBackgrounds.landscape || backgrounds.landscape;
+  const portrait = roleBackgrounds.portrait || backgrounds.portrait;
+  
+  if (landscape) {
+    document.body.style.setProperty('--bg-landscape', `url('${basePath()}${landscape}')`);
+  }
+  if (portrait) {
+    document.body.style.setProperty('--bg-portrait', `url('${basePath()}${portrait}')`);
+  }
+}
+
+function showLogin() {
+  document.getElementById('loginModal').classList.remove('hidden');
+  document.getElementById('gridContainer').classList.remove('visible');
+  document.getElementById('userInfo').style.display = 'none';
+}
+
+function showMainUI() {
+  document.getElementById('loginModal').classList.add('hidden');
+  document.getElementById('gridContainer').classList.add('visible');
+  document.getElementById('userInfo').style.display = 'block';
+  document.getElementById('usernameDisplay').textContent = currentUser.username + ' (' + currentUser.role + ')';
+  document.getElementById('searchToggle').classList.remove('hidden');
+  document.getElementById('searchExpr').placeholder = generateDynamicPlaceholder();
+  applyBackgrounds(currentUser.role);
+  buildEmojiPalette();
+  buildPresetButtons();
+  updateVideoCounts();
+  renderGrid();
+}
+
+async function handleLogin(e) {
+  e.preventDefault();
+  const btn = document.getElementById('loginBtn');
+  const errorEl = document.getElementById('errorMsg');
+  
+  const username = document.getElementById('username').value;
+  const password = document.getElementById('password').value;
+  
+  btn.disabled = true;
+  errorEl.textContent = '';
+  
+  try {
+    const res = await fetch(basePath() + '/api/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, password })
+    });
+    
+    if (res.ok) {
+      const data = await res.json();
+      currentUser = { username: data.username, role: data.role, filter: data.filter };
+      showMainUI();
+    } else {
+      const err = await res.json();
+      errorEl.textContent = err.detail || 'Invalid credentials';
+    }
+  } catch(e) {
+    errorEl.textContent = 'Connection error';
+  }
+  
+  btn.disabled = false;
+}
+
+async function logout() {
+  try {
+    await fetch(basePath() + '/api/logout', { method: 'POST' });
+  } catch(e) {}
+  currentUser = null;
+  showLogin();
+}
+
+async function handleGuest() {
+  const btn = document.getElementById('guestBtn');
+  btn.disabled = true;
+  
+  try {
+    const res = await fetch(basePath() + '/api/guest', { method: 'POST' });
+    if (res.ok) {
+      const data = await res.json();
+      currentUser = { username: data.username, role: data.role, filter: data.filter };
+      showMainUI();
+    } else {
+      const err = await res.json();
+      document.getElementById('errorMsg').textContent = err.detail || 'Guest access unavailable';
+    }
+  } catch(e) {
+    document.getElementById('errorMsg').textContent = 'Connection error';
+  }
+  
+  btn.disabled = false;
+}
+
+// SVG Generator
+function generateSVG(cols, rows, ratio){
+  const width = 100;
+  const height = width/ratio;
+  const padding = 5;
+
+  const cellWidth = (width - 2*padding)/cols;
+  const cellHeight = (height - 2*padding)/rows;
+
+  const gapX = cellWidth*0.09;
+  const gapY = cellHeight*0.09;
+
+  const ns = "http://www.w3.org/2000/svg";
+  const svg = document.createElementNS(ns,"svg");
+  svg.setAttribute("viewBox",`0 0 ${width} ${height}`);
+  svg.setAttribute("preserveAspectRatio","xMidYMid meet");
+
+  const defs = document.createElementNS(ns,"defs");
+  const mask = document.createElementNS(ns,"mask");
+  const maskId = "mask"+Math.random().toString(36).substr(2,9);
+  mask.setAttribute("id",maskId);
+
+  const bgRect = document.createElementNS(ns,"rect");
+  bgRect.setAttribute("x","0"); bgRect.setAttribute("y","0");
+  bgRect.setAttribute("width",width); bgRect.setAttribute("height",height);
+  bgRect.setAttribute("fill","white");
+  mask.appendChild(bgRect);
+
+  for(let r=0;r<rows;r++){
+    for(let c=0;c<cols;c++){
+      const rect = document.createElementNS(ns,"rect");
+      rect.setAttribute("x", padding + c*cellWidth + gapX/2);
+      rect.setAttribute("y", padding + r*cellHeight + gapY/2);
+      rect.setAttribute("width", cellWidth - gapX);
+      rect.setAttribute("height", cellHeight - gapY);
+      rect.setAttribute("rx",5); rect.setAttribute("ry",5);
+      rect.setAttribute("fill","black");
+      mask.appendChild(rect);
+    }
+  }
+
+  defs.appendChild(mask);
+  svg.appendChild(defs);
+
+  const mainRect = document.createElementNS(ns,"rect");
+  mainRect.setAttribute("x",padding); mainRect.setAttribute("y",padding);
+  mainRect.setAttribute("width", width-2*padding);
+  mainRect.setAttribute("height", height-2*padding);
+  mainRect.setAttribute("rx",5); mainRect.setAttribute("ry",5);
+  mainRect.setAttribute("fill","rgba(0,0,0,.38)");
+  mainRect.setAttribute("mask",`url(#${maskId})`);
+  svg.appendChild(mainRect);
+
+  const borderRect = document.createElementNS(ns,"rect");
+  borderRect.setAttribute("x",padding); borderRect.setAttribute("y",padding);
+  borderRect.setAttribute("width", width-2*padding);
+  borderRect.setAttribute("height", height-2*padding);
+  borderRect.setAttribute("rx",5); borderRect.setAttribute("ry",5);
+  borderRect.setAttribute("fill","none");
+  borderRect.setAttribute("stroke","#111");
+  borderRect.setAttribute("stroke-width","2");
+  svg.appendChild(borderRect);
+
+  return svg;
+}
+
+function getOrientation(){ 
+  return window.innerWidth>=window.innerHeight?'landscape':'portrait';
+}
+
+function renderGrid(){
+  const grid = document.getElementById('gridContainer');
+  grid.innerHTML='';
+  const orientation = getOrientation();
+  const ratio = orientation==='landscape'?16/9:9/16;
+  
+  // Get grid config or use defaults
+  const gridConfig = appConfig?.grid || {};
+  const defaultConfig = {
+    landscape:[
+      {cols:1, rows:1},null,{cols:4, rows:1},{cols:2, rows:1},null,{cols:2, rows:2},{cols:3, rows:1},null,{cols:3, rows:3}
+    ],
+    portrait:[
+      {cols:1, rows:1},{cols:1, rows:2},{cols:1, rows:3},null,null,null,{cols:1, rows:4},{cols:1, rows:5},{cols:2, rows:2}
+    ]
+  };
+  const boxes = gridConfig[orientation] || defaultConfig[orientation];
+
+  boxes.forEach(cfg=>{
+    if (cfg===null) {
+      const spacer = document.createElement('div');
+      spacer.style.width='100%'; spacer.style.height='100%';
+      grid.appendChild(spacer);
+      return;
+    }
+    const box = document.createElement('div');
+    box.className='svg-box';
+    const link = document.createElement('a');
+    // Include search expression if set
+    const expr = sessionStorage.getItem('searchExpr');
+    let href = basePath() + `/view?c=${cfg.cols}&r=${cfg.rows}`;
+    if (expr) href += `&expr=${encodeURIComponent(expr)}`;
+    link.href = href;
+    link.appendChild(generateSVG(cfg.cols, cfg.rows, ratio));
+    box.appendChild(link);
+    grid.appendChild(box);
+  });
+}
+
+// Init
+init();
+window.addEventListener('resize', () => { 
+  if(currentUser) renderGrid(); 
+  adjustPaletteSize();
+});
+
+// Search panel functions
+let searchPanelVisible = false;
+let countDebounceTimer = null;
+
+function toggleSearchPanel() {
+  searchPanelVisible = !searchPanelVisible;
+  document.getElementById('searchPanel').classList.toggle('visible', searchPanelVisible);
+  if (searchPanelVisible) {
+    updateVideoCounts();
+    // Adjust palette size after panel is visible and rendered
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => adjustPaletteSize());
+    });
+  }
+}
+
+function buildEmojiPalette() {
+  const palette = document.getElementById('emojiPalette');
+  palette.innerHTML = '';
+  
+  const categories = appConfig?.categories || {};
+  for (const [emoji, tooltip] of Object.entries(categories)) {
+    const btn = document.createElement('button');
+    btn.className = 'emoji-btn';
+    btn.textContent = emoji;
+    if (tooltip) btn.title = tooltip;
+    btn.dataset.tooltip = tooltip || emoji;
+    // Left click: insert emoji
+    btn.onclick = () => insertEmoji(emoji);
+    // Right click: insert NOT emoji
+    btn.oncontextmenu = (e) => {
+      e.preventDefault();
+      insertEmoji('!' + emoji);
+    };
+    // Long press for mobile tooltip
+    setupLongPressTooltip(btn, emoji, tooltip || emoji);
+    palette.appendChild(btn);
+  }
+  
+  // Check if palette needs compacting
+  requestAnimationFrame(() => adjustPaletteSize());
+}
+
+function adjustPaletteSize() {
+  const palette = document.getElementById('emojiPalette');
+  adjustPanelSize(palette, '.emoji-btn');
+}
+
+function buildPresetButtons() {
+  const row = document.getElementById('presetRow');
+  row.innerHTML = '';
+  
+  const presets = appConfig?.presets || {};
+  if (Object.keys(presets).length === 0) {
+    row.style.display = 'none';
+    return;
+  }
+  row.style.display = 'flex';
+  
+  // Add "Clear" button
+  const clearBtn = document.createElement('button');
+  clearBtn.className = 'preset-btn';
+  clearBtn.textContent = '✕ Clear';
+  clearBtn.onclick = () => {
+    document.getElementById('searchExpr').value = '';
+    updatePresetHighlight();
+    updateVideoCounts();
+  };
+  row.appendChild(clearBtn);
+  
+  for (const [name, expr] of Object.entries(presets)) {
+    const btn = document.createElement('button');
+    btn.className = 'preset-btn';
+    btn.textContent = name;
+    btn.dataset.expr = expr;
+    btn.onclick = () => {
+      document.getElementById('searchExpr').value = expr;
+      updatePresetHighlight();
+      updateVideoCounts();
+    };
+    row.appendChild(btn);
+  }
+}
+
+function updatePresetHighlight() {
+  const currentExpr = document.getElementById('searchExpr').value.trim();
+  const presets = appConfig?.presets || {};
+  
+  document.querySelectorAll('.preset-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.expr === currentExpr);
+  });
+}
+
+function generateDynamicPlaceholder() {
+  const categories = appConfig?.categories || {};
+  const emojis = Object.keys(categories);
+  if (emojis.length < 2) return 'Filter expression';
+  
+  // Pick 2 random emojis for the example
+  const shuffled = emojis.sort(() => Math.random() - 0.5);
+  const e1 = shuffled[0];
+  const e2 = shuffled[1];
+  
+  return `Expression (ex: ${e1}.!${e2})`;
+}
+
+async function updateVideoCounts() {
+  const counter = document.getElementById('videoCounter');
+  counter.classList.add('loading');
+  
+  const expr = document.getElementById('searchExpr').value.trim();
+  
+  try {
+    const res = await fetch(basePath() + `/api/search/count?expr=${encodeURIComponent(expr)}`);
+    if (res.ok) {
+      const counts = await res.json();
+      document.getElementById('countPortrait').textContent = counts.portrait;
+      document.getElementById('countSquare').textContent = counts.square;
+      document.getElementById('countLandscape').textContent = counts.landscape;
+      document.getElementById('countTotal').textContent = counts.total;
+    }
+  } catch(e) {
+    console.error('Failed to fetch counts:', e);
+  }
+  
+  counter.classList.remove('loading');
+}
+
+function debouncedUpdateCounts() {
+  clearTimeout(countDebounceTimer);
+  countDebounceTimer = setTimeout(updateVideoCounts, 300);
+}
+
+function insertEmoji(emoji) {
+  const input = document.getElementById('searchExpr');
+  const pos = input.selectionStart;
+  const val = input.value;
+  input.value = val.slice(0, pos) + emoji + val.slice(pos);
+  input.focus();
+  input.setSelectionRange(pos + emoji.length, pos + emoji.length);
+  updatePresetHighlight();
+  debouncedUpdateCounts();
+}
+
+function insertOp(op) {
+  const input = document.getElementById('searchExpr');
+  const pos = input.selectionStart;
+  const val = input.value;
+  input.value = val.slice(0, pos) + op + val.slice(pos);
+  input.focus();
+  input.setSelectionRange(pos + op.length, pos + op.length);
+  updatePresetHighlight();
+  debouncedUpdateCounts();
+}
+
+function applySearch() {
+  const expr = document.getElementById('searchExpr').value.trim();
+  // Store expression and navigate - links will use it
+  if (expr) {
+    sessionStorage.setItem('searchExpr', expr);
+  } else {
+    sessionStorage.removeItem('searchExpr');
+  }
+  // Re-render grid with expression in links
+  renderGrid();
+  toggleSearchPanel();
+}
+
+// Setup search input listener for live counts
+document.getElementById('searchExpr').addEventListener('input', () => {
+  updatePresetHighlight();
+  debouncedUpdateCounts();
+});
+</script>
+</body>
+</html>

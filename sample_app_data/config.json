@@ -1,0 +1,68 @@
+{
+  "title": "Filtered Random Video Mosaic",
+  "primaryColor": "#A089D4",
+  "backgroundColor": "#000070",
+  "basePath": "",
+  
+  "backgrounds": {
+    "guest": {
+      "landscape": "/data/landscape/background.jpg",
+      "portrait": "/data/portrait/background.jpg"
+    },
+    "user": {
+      "landscape": "/data/landscape/background.jpg",
+      "portrait": "/data/portrait/background.jpg"
+    },
+    "admin": {
+      "landscape": "/data/landscape/background.jpg",
+      "portrait": "/data/portrait/background.jpg"
+    }
+  },
+  
+  "categories": {
+    "🐈": "Annimals",
+    "☀️": "Summer",
+    "❄️": "Winter",
+    "🏈": "Sport",
+    "💧": "Water"
+  },
+  
+  "presets": {
+    "Winter Sports": "❄️.🏈",
+    "no Animals": "!🐈"
+  },
+  
+  "auth": {
+    "jwtSecret": "CHANGE_THIS_TO_A_RANDOM_SECRET_KEY_32_CHARS_MIN",
+    "tokenExpireHours": 24,
+    "guest": {
+      "enabled": true,
+      "filter": "!💧"
+    },
+    "users": {
+      "user": {
+        "password": "user_FRVM",
+        "role": "user",
+        "filter": null
+      },
+      "admin": {
+        "password": "admin_FRVM",
+        "role": "admin",
+        "filter": null
+      }
+    }
+  },
+  
+  "grid": {
+    "landscape": [
+      {"cols": 1, "rows": 1}, null, {"cols": 2, "rows": 1},
+      {"cols": 3, "rows": 1}, null, {"cols": 2, "rows": 2},
+      null, null, null
+    ],
+    "portrait": [
+      {"cols": 1, "rows": 1}, null, {"cols": 1, "rows": 2},
+      null, null, null,
+      {"cols": 1, "rows": 3}, null, {"cols": 2, "rows": 2}
+    ]
+  }
+}

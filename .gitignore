@@ -1,0 +1,26 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv/
+venv/
+ENV/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Generated thumbnails (except backgrounds)
+sample_app_data/**/*.jpg
+!sample_app_data/**/background*.jpg
+
+# Logs
+*.log
+
+# OS
+.DS_Store
+Thumbs.db

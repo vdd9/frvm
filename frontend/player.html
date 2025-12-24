@@ -1,0 +1,925 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <script type="text/javascript" src="static/SwipeDetector.js"></script>
+  <script type="text/javascript" src="static/common.js"></script>
+  <title>FRVM</title>
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      background: black;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      display: flex;
+      font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Mono', 'Droid Sans Mono', 'Source Code Pro', monospace;
+    }
+
+    #grid {
+      display: grid;
+      height: 100%;
+      width: 100%;
+      overflow: hidden;
+      grid-template-rows: repeat(var(--rows), 1fr);
+      grid-template-columns: repeat(var(--cols), 1fr);
+    }
+
+    #fullscreen-btn {
+      position: fixed;
+      bottom: 10px;
+      right: 10px;
+      background: rgba(0,0,0,0.4);
+      color: white;
+      border: none;
+      border-radius: 6px;
+      padding: 3px 6px;
+      font-size: 14px;
+      cursor: pointer;
+      z-index: 1000;
+      transition: opacity 0.3s ease;
+    }
+
+    #fullscreen-btn:hover {
+      background: rgba(0,0,0,0.6);
+    }
+
+    .player-wrapper {
+      position: relative;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: black;
+    }
+
+    .player-wrapper video {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+
+    .player-wrapper video.contain {
+      object-fit: contain;
+    }
+
+    .poster-layer {
+      position: absolute;
+      inset: 0;
+      background-size: cover;
+      background-position: center;
+      background-repeat: no-repeat;
+      opacity: 0;
+      z-index: 2;
+      pointer-events: none;
+    }
+
+    .poster-layer.visible {
+      opacity: 0.5;
+    }
+
+    .toaster {
+      position: absolute;
+      top: 5%;
+      left: 5%;
+      background: rgba(0, 0, 0, 0.5);
+      color: white;
+      padding: 3px 8px;
+      font-size: 1.5rem;
+      border-radius: 5px;
+      z-index: 4;
+      opacity: 0;
+      transition: opacity 0.3s ease;
+      pointer-events: none;
+    }
+
+    .toaster.visible {
+      opacity: 1;
+    }
+
+    .timeline-bar {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      width: 100%;
+      height: 1px;
+      background: transparent;
+      z-index: 5;
+      pointer-events: none;
+    }
+
+    .timeline-progress {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      height: 100%;
+      background: rgba(255, 105, 180, 0.9);
+      width: 0%;
+      transition: width 0.1s linear;
+    }
+
+    /* Categories panel */
+    .categories-panel {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      background: rgba(0, 0, 0, 0.4);
+      padding: 10px;
+      z-index: 6;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      justify-content: center;
+      transform: translateY(-100%);
+      transition: transform 0.3s ease;
+      pointer-events: none;
+    }
+
+    .categories-panel.visible {
+      transform: translateY(0);
+    }
+
+    /* Emoji category badge */
+    .cat-badge {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.8rem;
+      width: 2.5rem;
+      height: 2.5rem;
+      border-radius: 50%;
+      border: 3px solid transparent;
+      background: rgba(50, 50, 50, 0.6);
+      cursor: pointer;
+      user-select: none;
+    }
+
+    .cat-badge.yes {
+      border-color: #00ff00;
+    }
+
+    .cat-badge.no {
+      border-color: #ff0000;
+    }
+
+    .categories-panel.visible {
+      pointer-events: auto;
+    }
+
+    .validate-btn {
+      background: rgba(0, 200, 0, 0.7);
+      color: white;
+      border: none;
+      border-radius: 8px;
+      padding: 8px 16px;
+      font-size: 1.2rem;
+      cursor: pointer;
+      margin-left: 10px;
+    }
+
+    .validate-btn:hover {
+      background: rgba(0, 255, 0, 0.8);
+    }
+
+    /* Compact categories panel - auto-resize to fit 2 lines */
+    .categories-panel.compact .cat-badge {
+      font-size: 1.4rem;
+      width: 2rem;
+      height: 2rem;
+      border-width: 2px;
+    }
+    .categories-panel.compact .validate-btn {
+      font-size: 1rem;
+      padding: 6px 12px;
+    }
+    .categories-panel.very-compact .cat-badge {
+      font-size: 1.1rem;
+      width: 1.6rem;
+      height: 1.6rem;
+      border-width: 2px;
+    }
+    .categories-panel.very-compact .validate-btn {
+      font-size: 0.9rem;
+      padding: 5px 10px;
+    }
+    .categories-panel.ultra-compact .cat-badge {
+      font-size: 0.9rem;
+      width: 1.3rem;
+      height: 1.3rem;
+      border-width: 1px;
+    }
+    .categories-panel.ultra-compact .validate-btn {
+      font-size: 0.8rem;
+      padding: 4px 8px;
+    }
+    .categories-panel.compact,
+    .categories-panel.very-compact,
+    .categories-panel.ultra-compact {
+      gap: 4px;
+      padding: 6px;
+    }
+
+    /* Category tooltip overlay for mobile */
+    .category-tooltip-overlay {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: rgba(0, 0, 0, 0.9);
+      color: #fff;
+      padding: 16px 24px;
+      border-radius: 12px;
+      font-size: 1.2em;
+      z-index: 1000;
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.2s;
+      text-align: center;
+      border: 1px solid var(--primary-color, #ff69b4);
+    }
+    .category-tooltip-overlay.visible {
+      opacity: 1;
+    }
+    .category-tooltip-overlay .emoji {
+      font-size: 2em;
+      display: block;
+      margin-bottom: 8px;
+    }
+
+    /* No Results Overlay */
+    .no-results-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.9);
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      z-index: 1000;
+    }
+    .no-results-overlay.hidden { display: none; }
+    .no-results-overlay .icon { font-size: 4em; margin-bottom: 20px; }
+    .no-results-overlay .message { 
+      color: #888; 
+      font-size: 1.5em; 
+      text-align: center;
+      max-width: 80%;
+    }
+    .no-results-overlay .back-btn {
+      margin-top: 30px;
+      padding: 12px 24px;
+      background: var(--primary-color, #ff69b4);
+      color: #000;
+      border: none;
+      border-radius: 8px;
+      font-size: 1.1em;
+      cursor: pointer;
+      text-decoration: none;
+    }
+    .no-results-overlay .back-btn:hover { opacity: 0.9; }
+  </style>
+</head>
+<body>
+  <div id="grid"></div>
+  <button id="fullscreen-btn">⛶</button>
+  <div class="no-results-overlay hidden" id="noResultsOverlay">
+    <span class="icon">🔍</span>
+    <p class="message">No videos match your filter criteria</p>
+    <a class="back-btn" href="/">← Back to Home</a>
+  </div>
+
+  <script>
+
+    // Current user info (loaded on init)
+    let currentUser = null;
+    
+    // Auth check
+    function isAuthenticated() {
+      return currentUser !== null;
+    }
+    
+    function canEditCategories() {
+      return currentUser && currentUser.role === "admin";
+    }
+    
+    function canViewCategories() {
+      // Everyone can view categories (including guest)
+      return isAuthenticated();
+    }
+    
+    // App config (for category tooltips)
+    let appConfig = null;
+    
+    // Base path for all API calls and links (empty string = root, or "/subpath")
+    function basePath() {
+      return appConfig?.basePath || '';
+    }
+    
+    async function checkAuth() {
+      try {
+        // Load config for tooltips - try to detect basePath from URL
+        const pathParts = window.location.pathname.split('/').filter(p => p);
+        // Remove 'view' from the end if present
+        const viewIndex = pathParts.indexOf('view');
+        const basePathParts = viewIndex >= 0 ? pathParts.slice(0, viewIndex) : pathParts.slice(0, -1);
+        
+        let configLoaded = false;
+        for (let i = basePathParts.length; i >= 0; i--) {
+          const tryPath = '/' + basePathParts.slice(0, i).join('/');
+          const tryUrl = (tryPath === '/' ? '' : tryPath) + '/api/config';
+          try {
+            const configRes = await fetch(tryUrl);
+            if (configRes.ok) {
+              appConfig = await configRes.json();
+              // If basePath not in config, infer from working URL
+              if (!appConfig.basePath && tryPath !== '/') {
+                appConfig.basePath = tryPath;
+              }
+              configLoaded = true;
+              break;
+            }
+          } catch(e) {}
+        }
+        
+        const res = await fetch(basePath() + '/api/me');
+        if (res.ok) {
+          currentUser = await res.json();
+          // Update page title from config
+          document.title = appConfig?.title || 'FRVM';
+          // Update back button href
+          document.querySelector('.back-btn').href = basePath() + '/';
+          return true;
+        }
+      } catch(e) {}
+      // Redirect to login
+      window.location.href = basePath() + '/';
+      return false;
+    }
+
+    function getURLParams() {
+      const params = new URLSearchParams(window.location.search);
+      return {
+        cols: parseInt(params.get("c") || "1", 10),
+        rows: parseInt(params.get("r") || "1", 10),
+        expr: params.get("expr") || null,
+      };
+    }
+
+    function applyGrid(grid, cols, rows) {
+      grid.style.setProperty("--cols", cols);
+      grid.style.setProperty("--rows", rows);
+      grid.style.gridTemplateColumns = `repeat(${cols}, 1fr)`;
+      grid.style.gridTemplateRows = `repeat(${rows}, 1fr)`;
+    }
+
+    const fsBtn = document.getElementById("fullscreen-btn");
+    function isIOS() {
+      return /iP(ad|hone|od)/.test(navigator.userAgent);
+    }
+    if (isIOS()) {
+      fsBtn.style.display = "none";
+    }
+    fsBtn.addEventListener("click", async () => {
+      const activeVideo = document.querySelector("video");
+
+      if (!document.fullscreenElement) {
+        try {
+          if (isIOS()) {
+            await document.documentElement.requestFullscreen();
+          } else {
+            await document.getElementById("grid").requestFullscreen();
+          }
+        } catch (err) {
+          if (activeVideo?.webkitEnterFullscreen) {
+            activeVideo.webkitEnterFullscreen();
+          }
+        }
+      } else {
+        document.exitFullscreen();
+      }
+    });
+
+
+    async function createPlayer(container) {
+      const wrapper = document.createElement("div");
+      wrapper.className = "player-wrapper";
+
+      const posterLayer = document.createElement("div");
+      posterLayer.className = "poster-layer";
+
+      const toaster = document.createElement("div");
+      toaster.className = "toaster";
+
+      const timelineBar = document.createElement("div");
+      timelineBar.className = "timeline-bar";
+      const timelineProgress = document.createElement("div");
+      timelineProgress.className = "timeline-progress";
+      timelineBar.appendChild(timelineProgress);
+
+      const categoriesPanel = document.createElement("div");
+      categoriesPanel.className = "categories-panel";
+
+      const video = document.createElement("video");
+      video.muted = true;
+      video.playsInline = true;
+      video.autoplay = false;
+      video.controls = false;
+      video.preload = "auto";
+
+      wrapper.appendChild(video);
+      wrapper.appendChild(posterLayer);
+      wrapper.appendChild(toaster);
+      wrapper.appendChild(timelineBar);
+      wrapper.appendChild(categoriesPanel);
+      container.appendChild(wrapper);
+
+      let playlist = [];
+      let allCategories = [];
+      let currentVideoCats = {};
+      let currentVideoId = null;
+      let index = 0;
+
+      function getOrientation() {
+        const { cols, rows } = getURLParams();
+        const vw = window.innerWidth;
+        const vh = window.innerHeight;
+        const ratio = (vw / vh) * (rows / cols);
+        if (ratio < 0.8) return "portrait";
+        if (ratio > 1.2) return "landscape";
+        return "square";
+      }
+
+      async function fetchPlaylist() {
+        const orientation = getOrientation();
+        const { expr } = getURLParams();
+        let url = basePath() + `/api/videos?orientation=${orientation}`;
+        if (expr) {
+          url += `&expr=${encodeURIComponent(expr)}`;
+        }
+        try {
+          const res = await fetch(url);
+          const data = await res.json();
+          allCategories = data.categories || [];
+          playlist = data.videos || [];
+          index = 0;
+          
+          // Show/hide no results overlay
+          const overlay = document.getElementById('noResultsOverlay');
+          if (playlist.length === 0) {
+            overlay.classList.remove('hidden');
+          } else {
+            overlay.classList.add('hidden');
+          }
+        } catch (e) {
+          console.error("Failed to fetch playlist:", e);
+          playlist = [];
+          document.getElementById('noResultsOverlay').classList.remove('hidden');
+        }
+      }
+
+      // Pending edits (will be sent on validate)
+      let pendingCats = {};
+
+      function cycleCatState(emoji, reverse = false) {
+        const current = pendingCats[emoji] ?? currentVideoCats[emoji] ?? "UNSET";
+        
+        if (reverse) {
+          // Right click: UNSET → NO → YES → UNSET
+          if (current === "UNSET" || current === undefined) {
+            pendingCats[emoji] = "NO";
+          } else if (current === "NO") {
+            pendingCats[emoji] = "YES";
+          } else {
+            pendingCats[emoji] = "UNSET";
+          }
+        } else {
+          // Left click: UNSET → YES → NO → UNSET
+          if (current === "UNSET" || current === undefined) {
+            pendingCats[emoji] = "YES";
+          } else if (current === "YES") {
+            pendingCats[emoji] = "NO";
+          } else {
+            pendingCats[emoji] = "UNSET";
+          }
+        }
+      }
+
+      function updateCategoriesPanel() {
+        categoriesPanel.innerHTML = "";
+        
+        // Merge current video cats with pending edits
+        const displayCats = { ...currentVideoCats, ...pendingCats };
+        
+        // Get tooltips from config
+        const tooltips = appConfig?.categories || {};
+        
+        for (const emoji of allCategories) {
+          const badge = document.createElement("span");
+          badge.className = "cat-badge";
+          badge.textContent = emoji;
+          badge.dataset.emoji = emoji;
+          
+          // Add tooltip if available
+          if (tooltips[emoji]) {
+            badge.title = tooltips[emoji];
+          }
+          
+          const state = displayCats[emoji];
+          if (state === "YES") {
+            badge.classList.add("yes");
+          } else if (state === "NO") {
+            badge.classList.add("no");
+          }
+          
+          // Prevent SwipeDetector from capturing pointer events on badges
+          badge.addEventListener("pointerdown", (e) => {
+            e.stopPropagation();
+          });
+          
+          // Prevent context menu on right click
+          badge.addEventListener("contextmenu", (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+          });
+          
+          // Left click: cycle UNSET → YES → NO → UNSET (admin only)
+          badge.addEventListener("click", (e) => {
+            e.stopPropagation();
+            if (!canEditCategories()) return;
+            cycleCatState(emoji, false);
+            updateCategoriesPanel();
+          });
+          
+          // Right click: cycle reverse UNSET → NO → YES → UNSET (admin only)
+          badge.addEventListener("mousedown", (e) => {
+            if (e.button === 2) { // Right click
+              e.stopPropagation();
+              e.preventDefault();
+              if (!canEditCategories()) return;
+              cycleCatState(emoji, true);
+              updateCategoriesPanel();
+            }
+          });
+          
+          // Long press for mobile tooltip
+          const tooltip = tooltips[emoji] || emoji;
+          setupLongPressTooltip(badge, emoji, tooltip);
+          
+          categoriesPanel.appendChild(badge);
+        }
+        
+        // Validate button (only visible for admin)
+        if (canEditCategories()) {
+          const validateBtn = document.createElement("button");
+          validateBtn.className = "validate-btn";
+          validateBtn.textContent = "✓";
+          
+          // Prevent SwipeDetector from capturing pointer events
+          validateBtn.addEventListener("pointerdown", (e) => {
+            e.stopPropagation();
+          });
+          
+          validateBtn.addEventListener("click", async (e) => {
+            e.stopPropagation();
+            if (!canEditCategories()) return;
+            await saveCategories();
+            // Keep panel open and go to next video for faster tagging
+            playNext();
+            // Panel stays visible, will update with new video's categories
+          });
+          categoriesPanel.appendChild(validateBtn);
+        }
+      }
+
+      async function saveCategories() {
+        if (Object.keys(pendingCats).length === 0) return;
+        
+        const videoId = currentVideoId;
+        if (!videoId) return;
+        
+        try {
+          await fetch(basePath() + `/video/${encodeURIComponent(videoId)}/categories`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(pendingCats)
+          });
+          
+          // Merge into currentVideoCats
+          for (const [emoji, state] of Object.entries(pendingCats)) {
+            if (state === "UNSET") {
+              delete currentVideoCats[emoji];
+            } else {
+              currentVideoCats[emoji] = state;
+            }
+          }
+          pendingCats = {};
+        } catch (e) {
+          console.error("Failed to save categories:", e);
+        }
+      }
+
+      function showCategoriesPanel() {
+        // Only user and admin can access category panel (not guest)
+        if (!canViewCategories()) {
+          flashToaster("🔒");
+          return;
+        }
+        pendingCats = {};
+        updateCategoriesPanel();
+        categoriesPanel.classList.add("visible");
+        // Adjust size after panel is visible
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => adjustCategoriesPanelSize());
+        });
+      }
+
+      function hideCategoriesPanel() {
+        pendingCats = {};
+        categoriesPanel.classList.remove("visible");
+      }
+
+      function adjustCategoriesPanelSize() {
+        adjustPanelSize(categoriesPanel, '.cat-badge');
+      }
+
+      function showPoster(url) {
+        posterLayer.style.backgroundImage = `url(${url})`;
+        posterLayer.offsetHeight;
+        posterLayer.classList.add("visible");
+      }
+
+      function hidePoster(nextPosterUrl) {
+        posterLayer.classList.remove("visible");
+        if (nextPosterUrl) {
+          posterLayer.style.backgroundImage = `url(${nextPosterUrl})`;
+        }
+      }
+
+      function displayToaster(text) {
+        toaster.innerText = text;
+        toaster.classList.add("visible");
+      }
+
+      function flushToaster(text) {
+        toaster.innerText = text;
+        toaster.classList.remove("visible")
+      }
+      
+      function flashToaster(text) {
+        displayToaster(text);
+        setTimeout(() => flushToaster(text), 1000);
+      }
+
+      async function playNext() {
+        if (index >= playlist.length) {
+          await fetchPlaylist();
+        }
+
+        const item = playlist[index++];
+        if (!item) return;
+
+        // Remember if panel was visible
+        const panelWasVisible = categoriesPanel.classList.contains("visible");
+
+        // Store current video info
+        currentVideoId = item.id;
+        currentVideoCats = item.cats || {};
+        pendingCats = {};
+
+        // Update panel if it was visible (keep it open for fast tagging)
+        if (panelWasVisible) {
+          updateCategoriesPanel();
+        }
+
+        timelineProgress.style.width = "0%";
+        showPoster(item.poster);
+        video.src = item.url;
+        video.load();
+
+        const handleError = () => {
+          console.warn("Video error, skipping...");
+          video.removeEventListener("error", handleError);
+          playNext();
+        };
+
+        video.addEventListener("error", handleError);
+
+        video.onloadeddata = () => {
+          const next = playlist[index];
+          hidePoster(next?.poster);
+          video.play();
+        };
+      }
+
+      await fetchPlaylist();
+
+      const firstItem = playlist[index++];
+      if (firstItem) {
+        currentVideoId = firstItem.id;
+        currentVideoCats = firstItem.cats || {};
+        showPoster(firstItem.poster);
+        video.src = firstItem.url;
+        video.load();
+      }
+
+      video.onloadeddata = () => {
+        const next = playlist[index];
+        hidePoster(next?.poster);
+        video.play();
+      };
+
+      video.addEventListener("timeupdate", () => {
+        if (video.duration) {
+          const progress = (video.currentTime / video.duration) * 100;
+          timelineProgress.style.width = `${progress}%`;
+        }
+      });
+
+      video.addEventListener("ended", () => {
+        timelineProgress.style.width = "0%";
+        
+        // Only admin can edit categories, so only admin needs looping
+        // to save changes before moving to next video
+        if (categoriesPanel.classList.contains("visible") && canEditCategories()) {
+          video.currentTime = 0;
+          video.play();
+          return;
+        }
+        
+        // Auto-advance to next video
+        const next = playlist[index];
+        showPoster(next?.poster);
+        playNext();
+      });
+
+      // Swipe gestures
+      const swipe = new SwipeDetector({
+        element: wrapper,
+
+        allowedDirections: [
+          "right",
+          "up",
+          "up-right",
+          "up-left",
+          "down-right",
+          "down-left",
+          "left",
+          "down",
+        ],
+
+        resistance: 0.2,
+
+        onMove({ dx, dy, distance }) {
+          wrapper.style.transform = `translate(${dx}px, ${dy}px)`;
+          // Track if panel was visible when swipe started
+          if (wrapper.dataset.panelWasVisible === undefined || wrapper.dataset.panelWasVisible === "") {
+            wrapper.dataset.panelWasVisible = categoriesPanel.classList.contains("visible") ? "true" : "false";
+          }
+          // Pull down the categories panel proportionally
+          if (dy > 0 && wrapper.dataset.panelWasVisible !== "true") {
+            const panelOffset = Math.min(dy * 2, categoriesPanel.offsetHeight || 60);
+            categoriesPanel.style.transform = `translateY(calc(-100% + ${panelOffset}px))`;
+          }
+        },
+
+        onDetect({ direction, distance }) {
+          wrapper.dataset.swipe = direction;
+          switch (direction) {
+            case "up-right":
+            case "up-left":
+              displayToaster(!video.muted ? "🔇" : "🔊");
+              break;
+            case "down-right":
+            case "down-left":
+              // Preview: show what mode we'll switch TO
+              displayToaster(video.classList.contains("contain") ? "📺" : "🖼️");
+              break;
+            case "left":
+              video.pause();
+              displayToaster("⏮️");
+              break;
+            case "right":
+              video.playbackRate = 2;
+              displayToaster("⏩");
+              break;
+            case "up":
+              displayToaster("⏭️");
+              break;
+            case "down":
+              // Toggle panel
+              if (categoriesPanel.classList.contains("visible")) {
+                // Will hide on onEnd
+              } else {
+                showCategoriesPanel();
+              }
+              break;
+          }
+        },
+
+        onEnd({ direction }) {
+          switch (direction) {
+            case "up-right":
+            case "up-left":
+              video.muted = !video.muted;
+              flashToaster(video.muted ? "🔇" : "🔊");
+              break;
+            case "down-right":
+            case "down-left":
+              // Toggle object-fit: cover <-> contain
+              video.classList.toggle("contain");
+              flashToaster(video.classList.contains("contain") ? "🖼️" : "📺");
+              break;
+            case "up":
+              video.pause();
+              playNext();
+              break;
+            case "left":
+              video.currentTime = 0;
+              video.play();
+              flashToaster("▶️");
+              break;
+            case "right":
+              video.playbackRate = 1;
+              flashToaster("▶️");
+              break;
+            case "down":
+              // Toggle: if was visible before swipe, hide it
+              if (wrapper.dataset.panelWasVisible === "true") {
+                hideCategoriesPanel();
+              }
+              // else panel stays visible (was just shown)
+              break;
+          }
+          wrapper.style.transform = "";
+          wrapper.dataset.swipe = "";
+          wrapper.dataset.panelWasVisible = "";
+          categoriesPanel.style.transform = "";
+        },
+
+        onCancel() {
+          switch (wrapper.dataset.swipe) {
+            case "up-right":
+            case "up-left":
+              flashToaster(video.muted ? "🔇" : "🔊");
+              break;
+            case "down-right":
+            case "down-left":
+              // Cancel: show current mode (no change)
+              flashToaster(video.classList.contains("contain") ? "🖼️" : "📺");
+              break;
+            case "up":
+              flashToaster("▶️");
+              break;
+            case "left":
+              video.play();
+              flashToaster("▶️");
+              break;
+            case "right":
+              video.playbackRate = 1;
+              flashToaster("▶️");
+              break;
+            case "down":
+              hideCategoriesPanel();
+              break;
+          }
+          wrapper.style.transform = "";
+          wrapper.dataset.swipe = "";
+          categoriesPanel.style.transform = "";
+        }
+      });
+    }
+
+    function createGrid() {
+      const { cols, rows } = getURLParams();
+      const grid = document.getElementById("grid");
+      applyGrid(grid, cols, rows);
+
+      for (let i = 0; i < cols * rows; i++) {
+        const cell = document.createElement("div");
+        createPlayer(cell);
+        grid.appendChild(cell);
+      }
+    }
+
+    // Init with auth check
+    (async () => {
+      if (await checkAuth()) {
+        createGrid();
+      }
+    })();
+
+    // Resize handler for categories panel - call adjustSize on each visible panel
+    window.addEventListener('resize', () => {
+      document.querySelectorAll('.categories-panel.visible').forEach(panel => {
+        adjustPanelSize(panel, '.cat-badge');
+      });
+    });
+    
+  </script>
+</body>
+</html>

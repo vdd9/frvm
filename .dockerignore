@@ -1,0 +1,34 @@
+# Git
+.git
+.gitignore
+
+# GitHub Actions
+.github
+
+# Documentation
+README.md
+LICENSE
+
+# Development
+.venv
+__pycache__
+*.pyc
+*.pyo
+.pytest_cache
+.mypy_cache
+
+# Sample/test data (user provides their own)
+sample_app_data
+
+# Scripts not needed in container
+*.sh
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+
+# Docker (avoid recursive copy)
+Dockerfile
+.dockerignore

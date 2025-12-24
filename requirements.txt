@@ -1,0 +1,5 @@
+fastapi==0.112.0
+uvicorn[standard]==0.23.2
+bitarray==2.8.1
+python-multipart==0.0.9
+PyJWT==2.8.0
