@@ -12,7 +12,7 @@ import sys
 from state import State
 from writer import writer_loop
 from logic import evaluate
-from utils import parse_compact_categories
+from utils import parse_compact_categories, parse_performers_line
 from auth import AuthManager
 
 # Parse arguments
@@ -21,6 +21,8 @@ def parse_args():
     parser.add_argument("--data", type=str, default="/data", help="Path to data directory")
     parser.add_argument("--port", type=int, default=8000, help="Port to run on")
     parser.add_argument("--host", type=str, default="0.0.0.0", help="Host to bind to")
+    parser.add_argument("--readonly", action="store_true", help="Read-only mode (no writes to disk)")
+    parser.add_argument("--basepath", type=str, default=None, help="Override basePath from config (use '' for no prefix)")
     
     # Handle both direct execution and uvicorn import
     # Filter out uvicorn args to avoid conflicts
@@ -72,10 +74,44 @@ config = load_config()
 auth_manager = AuthManager(config)
 
 # Base path for reverse proxy setups (e.g., "/myapp" if behind nginx at domain.com/myapp/)
-BASE_PATH = config.get("basePath", "")
+BASE_PATH = args.basepath if args.basepath is not None else config.get("basePath", "")
 
 app = FastAPI()
 queue = Queue()
+
+
+def load_performers(state, data_dir: Path):
+    """Load performers from the performers/ folder.
+    Each .jpg = a performer (filename without extension = name).
+    performers.txt = URLs, one line per performer, separated by |.
+    Match: a performer's name (case-insensitive) appears in the URL line.
+    """
+    perf_dir = data_dir / "performers"
+    if not perf_dir.exists():
+        return
+
+    # Collect performer names from .jpg files
+    perf_names = []
+    for jpg in perf_dir.glob("*.jpg"):
+        perf_names.append(jpg.stem)
+
+    # Read URL lines from performers.txt
+    url_lines = []
+    perf_txt = perf_dir / "performers.txt"
+    if perf_txt.exists():
+        url_lines = [line.strip() for line in perf_txt.read_text(encoding="utf-8").splitlines() if line.strip()]
+
+    # Register each performer and match URLs
+    for name in perf_names:
+        state.add_performer(name)
+        state.performer_info[name]["avatar"] = f"/data/performers/{name}.jpg"
+
+        # Find the URL line that contains this performer name (case-insensitive)
+        name_lower = name.lower()
+        for line in url_lines:
+            if name_lower in line.lower():
+                state.performer_info[name]["urls"] = line.split("|")
+                break
 
 
 def iter_all_videos():
@@ -87,8 +123,13 @@ def iter_all_videos():
                 yield orientation, video_file
 
 
-# Load state from .txt files (scanning all orientation subfolders)
+# Load performers from performers/ folder
 state = State()
+load_performers(state, DATA_DIR)
+# Special "_none" performer: marks videos as explicitly having no performers
+state.add_performer("_none")
+
+# Load state from .txt files (scanning all orientation subfolders)
 for orientation, video_file in iter_all_videos():
     # video_id includes orientation prefix: "landscape/video.mp4"
     video_id = f"{orientation}/{video_file.name}"
@@ -105,9 +146,25 @@ for orientation, video_file in iter_all_videos():
                 state.categories[emoji]["yes"][idx] = (val == "YES")
                 state.categories[emoji]["no"][idx] = (val == "NO")
 
-# Start writer process (writes to .txt files)
-writer = Process(target=writer_loop, args=(state, queue, DATA_DIR))
-writer.start()
+            # Load performers for this video
+            perf_names = parse_performers_line(text)
+            idx = state.video_index[video_id]
+            for name in perf_names:
+                if name not in state.performers:
+                    # Handle _none or unknown performers
+                    if name == "_none":
+                        state.extend_performer(name)
+                    else:
+                        continue
+                else:
+                    state.extend_performer(name)
+                state.performers[name][idx] = True
+
+# Start writer process (writes to .txt files) — skip in readonly mode
+READONLY = args.readonly
+if not READONLY:
+    writer = Process(target=writer_loop, args=(state, queue, DATA_DIR))
+    writer.start()
 
 
 # ---------------- Auth Endpoints ----------------
@@ -191,6 +248,8 @@ async def list_categories(request: Request):
 @app.post("/video/{video_id:path}/categories")
 async def update_video_categories(video_id: str, categories: dict[str, str], request: Request):
     """Update categories for a video (admin only)."""
+    if READONLY:
+        raise HTTPException(status_code=403, detail="Server is in read-only mode")
     user = auth_manager.get_user_from_request(request)
     if not user:
         raise HTTPException(status_code=401, detail="Not authenticated")
@@ -298,7 +357,7 @@ async def get_video_playlist(
     
     # If expression provided, filter by categories first
     if expr:
-        bits = evaluate(expr, state.categories)
+        bits = evaluate(expr, state.categories, state.performers)
         matching_ids = [state.index_video[i] for i, b in enumerate(bits) if b]
         
         # Filter by orientation if specified
@@ -325,7 +384,8 @@ async def get_video_playlist(
                 "id": video_id,
                 "url": video_url,
                 "poster": thumb_url if thumb_file.exists() else None,
-                "cats": get_video_categories_dict(video_id)
+                "cats": get_video_categories_dict(video_id),
+                "performers": state.get_video_performers(video_id)
             })
         
         return {"categories": all_categories, "videos": videos}
@@ -363,10 +423,71 @@ async def get_video_playlist(
             "id": video_id,
             "url": video_url,
             "poster": thumb_url if thumb_file.exists() else None,
-            "cats": get_video_categories_dict(video_id)
+            "cats": get_video_categories_dict(video_id),
+            "performers": state.get_video_performers(video_id)
         })
 
     return {"categories": all_categories, "videos": videos}
+
+
+# ---------------- Performer Endpoints ----------------
+
+def build_performers_info() -> dict:
+    """Build performers info dict for API responses (excludes _none)."""
+    return {
+        name: {
+            "avatar": f"{BASE_PATH}{info['avatar']}" if info["avatar"] else None,
+            "urls": info["urls"]
+        }
+        for name, info in state.performer_info.items()
+        if name != "_none"
+    }
+
+
+@app.get("/api/performers")
+async def list_performers(request: Request):
+    """Get list of all known performers with their info."""
+    user = auth_manager.get_user_from_request(request)
+    if not user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    return build_performers_info()
+
+
+@app.post("/video/{video_id:path}/performers")
+async def update_video_performers(video_id: str, request: Request):
+    """Update performers for a video (admin only). Body: {"performers": ["Name1", "Name2"]}"""
+    if READONLY:
+        raise HTTPException(status_code=403, detail="Server is in read-only mode")
+    user = auth_manager.get_user_from_request(request)
+    if not user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    if user["role"] != "admin":
+        raise HTTPException(status_code=403, detail="Only admins can edit performers")
+
+    if video_id not in state.video_index:
+        return {"error": "Video not found"}
+
+    try:
+        body = await request.json()
+        performers = body.get("performers", [])
+    except:
+        raise HTTPException(status_code=400, detail="Invalid request body")
+
+    idx = state.video_index[video_id]
+
+    # Update state in main process (for immediate reads)
+    for name, bits in state.performers.items():
+        state.extend_performer(name)
+        bits[idx] = (name in performers)
+
+    # Send to writer for persistence
+    queue.put({
+        "type": "SET_PERFORMERS",
+        "video_id": video_id,
+        "performers": performers
+    })
+    queue.put({"type": "SNAPSHOT"})
+    return {"ok": True}
 
 
 # ---------------- Config ----------------
@@ -386,7 +507,7 @@ async def search_count(request: Request, expr: str = Query("", description="Bool
     # Get matching video IDs
     if expr:
         try:
-            bits = evaluate(expr, state.categories)
+            bits = evaluate(expr, state.categories, state.performers)
             matching_ids = [state.index_video[i] for i, b in enumerate(bits) if b]
         except Exception:
             matching_ids = []
@@ -428,7 +549,8 @@ def get_config():
         "categories": categories_with_tooltips,
         "presets": config.get("presets", {}),
         "grid": config.get("grid", {}),
-        "basePath": BASE_PATH
+        "basePath": BASE_PATH,
+        "performers": build_performers_info()
     }
 
 
@@ -455,5 +577,6 @@ if __name__ == "__main__":
     print(f"Starting FRVM server...")
     print(f"  Data directory: {DATA_DIR}")
     print(f"  Frontend directory: {FRONTEND_DIR}")
+    print(f"  Read-only: {READONLY}")
     print(f"  Listening on: {args.host}:{args.port}")
     uvicorn.run(app, host=args.host, port=args.port)

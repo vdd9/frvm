@@ -51,6 +51,7 @@
       width: 100%;
       height: 100%;
       overflow: hidden;
+      container-type: inline-size;
       background: black;
     }
 
@@ -282,6 +283,177 @@
       text-decoration: none;
     }
     .no-results-overlay .back-btn:hover { opacity: 0.9; }
+
+    /* Performers panel - slides up from bottom */
+    .performers-panel {
+      position: absolute;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0, 0, 0, 0.4);
+      padding: 8px 10px;
+      z-index: 5;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      justify-content: center;
+      align-items: center;
+      transform: translateY(100%);
+      transition: transform 0.3s ease;
+      pointer-events: none;
+      max-height: 45%;
+      overflow-y: auto;
+    }
+    .performers-panel.visible {
+      transform: translateY(0);
+      pointer-events: auto;
+    }
+
+    /* Performer badge */
+    .perf-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 3px 8px;
+      border-radius: 16px;
+      background: rgba(50, 50, 50, 0.7);
+      cursor: pointer;
+      user-select: none;
+      transition: all 0.2s;
+      position: relative;
+    }
+    .perf-badge.active {
+      outline: 3px solid #00ff00;
+      outline-offset: -3px;
+    }
+    .perf-badge.inactive {
+      outline: 2px dashed #555;
+      outline-offset: -2px;
+      opacity: 0.7;
+    }
+    .perf-badge img {
+      width: clamp(40px, 25cqi, 160px);
+      height: clamp(40px, 25cqi, 160px);
+      border-radius: 12px;
+      object-fit: cover;
+    }
+    /* Tooltip on hover */
+    @media (hover: hover) {
+      .perf-badge::after {
+        content: attr(data-name);
+        position: absolute;
+        bottom: calc(100% + 6px);
+        left: 50%;
+        transform: translateX(-50%);
+        background: rgba(0, 0, 0, 0.85);
+        color: #fff;
+        font-size: 0.7rem;
+        padding: 3px 8px;
+        border-radius: 6px;
+        white-space: nowrap;
+        pointer-events: none;
+        opacity: 0;
+        transition: opacity 0.15s;
+        z-index: 20;
+      }
+      .perf-badge:hover::after {
+        opacity: 1;
+      }
+    }
+
+    /* Compact performers */
+    .performers-panel.compact .perf-badge img { width: clamp(32px, 20cqi, 120px); height: clamp(32px, 20cqi, 120px); }
+    .performers-panel.compact .perf-badge { padding: 2px 5px; gap: 3px; }
+    .performers-panel.very-compact .perf-badge img { width: clamp(24px, 15cqi, 90px); height: clamp(24px, 15cqi, 90px); }
+    .performers-panel.very-compact .perf-badge { padding: 2px 3px; }
+    .performers-panel.ultra-compact .perf-badge img { width: clamp(20px, 10cqi, 70px); height: clamp(20px, 10cqi, 70px); }
+    .performers-panel.ultra-compact .perf-badge { padding: 1px 2px; }
+    .performers-panel.compact,
+    .performers-panel.very-compact,
+    .performers-panel.ultra-compact { gap: 3px; padding: 4px; }
+
+    /* Performer indicator (visible on video without opening panels) */
+    .performer-indicator {
+      position: absolute;
+      bottom: 6px;
+      left: 6px;
+      background: rgba(0, 0, 0, 0.5);
+      color: #ccc;
+      font-size: 0.75rem;
+      padding: 2px 6px;
+      border-radius: 10px;
+      z-index: 7;
+      opacity: 0;
+      transition: opacity 0.3s ease;
+      pointer-events: none;
+    }
+    .performer-indicator.visible {
+      opacity: 1;
+      pointer-events: auto;
+      cursor: pointer;
+    }
+
+    /* Performer links popup */
+    .perf-links-popup {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: rgba(20, 20, 20, 0.95);
+      border: 1px solid var(--primary-color, #ff69b4);
+      border-radius: 12px;
+      padding: 16px 20px;
+      z-index: 1100;
+      max-width: 90vw;
+      max-height: 60vh;
+      overflow-y: auto;
+      text-align: center;
+    }
+    .perf-links-popup.hidden { display: none; }
+    .perf-links-popup .perf-popup-header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      justify-content: center;
+      margin-bottom: 12px;
+    }
+    .perf-links-popup .perf-popup-header img {
+      width: 48px;
+      height: 48px;
+      border-radius: 8px;
+      object-fit: cover;
+    }
+    .perf-links-popup .perf-popup-header .name {
+      color: #fff;
+      font-size: 1.2em;
+      font-weight: bold;
+    }
+    .perf-links-popup a {
+      display: block;
+      color: var(--primary-color, #ff69b4);
+      text-decoration: none;
+      padding: 6px 0;
+      font-size: 0.9em;
+      word-break: break-all;
+    }
+    .perf-links-popup a:hover { text-decoration: underline; }
+    .perf-links-popup .close-btn {
+      margin-top: 12px;
+      background: #333;
+      color: #aaa;
+      border: none;
+      border-radius: 6px;
+      padding: 6px 16px;
+      cursor: pointer;
+    }
+    .perf-links-popup .close-btn:hover { color: #fff; }
+    .perf-links-backdrop {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.5);
+      z-index: 1099;
+    }
+    .perf-links-backdrop.hidden { display: none; }
   </style>
 </head>
 <body>
@@ -340,7 +512,6 @@
               if (!appConfig.basePath && tryPath !== '/') {
                 appConfig.basePath = tryPath;
               }
-              configLoaded = true;
               break;
             }
           } catch(e) {}
@@ -424,6 +595,21 @@
       const categoriesPanel = document.createElement("div");
       categoriesPanel.className = "categories-panel";
 
+      const performersPanel = document.createElement("div");
+      performersPanel.className = "performers-panel";
+
+      const performerIndicator = document.createElement("div");
+      performerIndicator.className = "performer-indicator";
+      performerIndicator.addEventListener("pointerdown", e => e.stopPropagation());
+      performerIndicator.addEventListener("click", e => {
+        e.stopPropagation();
+        if (performersPanel.classList.contains("visible")) {
+          hidePerformersPanel();
+        } else {
+          showPerformersPanel();
+        }
+      });
+
       const video = document.createElement("video");
       video.muted = true;
       video.playsInline = true;
@@ -436,12 +622,16 @@
       wrapper.appendChild(toaster);
       wrapper.appendChild(timelineBar);
       wrapper.appendChild(categoriesPanel);
+      wrapper.appendChild(performersPanel);
+      wrapper.appendChild(performerIndicator);
       container.appendChild(wrapper);
 
       let playlist = [];
       let allCategories = [];
       let currentVideoCats = {};
       let currentVideoId = null;
+      let currentVideoPerformers = [];  // list of performer names for current video
+      let pendingPerformers = null;     // null = no changes, array = pending state
       let index = 0;
 
       function getOrientation() {
@@ -588,6 +778,7 @@
             e.stopPropagation();
             if (!canEditCategories()) return;
             await saveCategories();
+            await savePerformers();
             // Keep panel open and go to next video for faster tagging
             playNext();
             // Panel stays visible, will update with new video's categories
@@ -647,6 +838,261 @@
         adjustPanelSize(categoriesPanel, '.cat-badge');
       }
 
+      // ---- Performers Panel ----
+
+      function getAllPerformers() {
+        return appConfig?.performers || {};
+      }
+
+      function updatePerformerIndicator() {
+        const perfs = (pendingPerformers ?? currentVideoPerformers).filter(p => p !== "_none");
+        if (perfs.length > 0) {
+          performerIndicator.textContent = "👤" + perfs.length;
+          performerIndicator.classList.add("visible");
+        } else {
+          performerIndicator.classList.remove("visible");
+        }
+      }
+
+      function updatePerformersPanel() {
+        performersPanel.innerHTML = "";
+        const allPerfs = getAllPerformers();
+        const perfNames = Object.keys(allPerfs);
+        if (perfNames.length === 0) return;
+
+        const currentPerfs = new Set(pendingPerformers ?? currentVideoPerformers);
+
+        if (canEditCategories()) {
+          // Admin view: "none" badge — ternary state:
+          //   - undecided (no style): admin hasn't decided yet (no performers set, no explicit none)
+          //   - active (green): admin explicitly marked "no performers" (_none in list)
+          //   - inactive (dashed): there ARE performers assigned, so "none" doesn't apply
+          const hasExplicitNone = currentPerfs.has("_none");
+          const hasRealPerformers = [...currentPerfs].some(p => p !== "_none");
+          const noneBadge = document.createElement("span");
+          if (hasExplicitNone) {
+            noneBadge.className = "perf-badge active";
+          } else if (hasRealPerformers) {
+            noneBadge.className = "perf-badge inactive";
+          } else {
+            noneBadge.className = "perf-badge"; // undecided — no outline
+          }
+          noneBadge.dataset.name = "none";
+          noneBadge.textContent = "\u2205";
+          noneBadge.style.fontSize = "1.5em";
+          noneBadge.style.padding = "8px 12px";
+          noneBadge.addEventListener("pointerdown", e => e.stopPropagation());
+          noneBadge.addEventListener("click", e => {
+            e.stopPropagation();
+            if (!pendingPerformers) pendingPerformers = [...currentVideoPerformers];
+            const noneIdx = pendingPerformers.indexOf("_none");
+            if (noneIdx >= 0) {
+              // Was explicit none → remove it (back to undecided)
+              pendingPerformers.splice(noneIdx, 1);
+            } else {
+              // Set explicit none: clear all real performers, add _none
+              pendingPerformers = ["_none"];
+            }
+            updatePerformersPanel();
+            updatePerformerIndicator();
+          });
+          performersPanel.appendChild(noneBadge);
+
+          // Admin view: show ALL performers, toggle active/inactive
+          for (const name of perfNames) {
+            const info = allPerfs[name];
+            const badge = createPerfBadge(name, info, currentPerfs.has(name));
+
+            badge.addEventListener("pointerdown", e => e.stopPropagation());
+            badge.addEventListener("contextmenu", e => { e.preventDefault(); e.stopPropagation(); });
+
+            // Click to toggle
+            badge.addEventListener("click", e => {
+              e.stopPropagation();
+              if (!pendingPerformers) pendingPerformers = [...currentVideoPerformers];
+              const idx = pendingPerformers.indexOf(name);
+              if (idx >= 0) {
+                pendingPerformers.splice(idx, 1);
+              } else {
+                pendingPerformers.push(name);
+                // Remove _none if adding a real performer
+                const noneIdx = pendingPerformers.indexOf("_none");
+                if (noneIdx >= 0) pendingPerformers.splice(noneIdx, 1);
+              }
+              updatePerformersPanel();
+              updatePerformerIndicator();
+            });
+
+            // Long press: show links (admin)
+            setupPerfLongPress(badge, name, info);
+
+            performersPanel.appendChild(badge);
+          }
+        } else {
+          // User/guest view: show only performers associated with this video
+          for (const name of currentPerfs) {
+            const info = allPerfs[name];
+            if (!info) continue;
+            const badge = createPerfBadge(name, info, true);
+
+            badge.addEventListener("pointerdown", e => e.stopPropagation());
+
+            // Click: show links (user)
+            badge.addEventListener("click", e => {
+              e.stopPropagation();
+              showPerfLinksPopup(name, info);
+            });
+
+            performersPanel.appendChild(badge);
+          }
+        }
+
+        // Validate button for admin (saves both categories AND performers)
+        if (canEditCategories()) {
+          const validateBtn = document.createElement("button");
+          validateBtn.className = "validate-btn";
+          validateBtn.textContent = "✓";
+          validateBtn.addEventListener("pointerdown", e => e.stopPropagation());
+          validateBtn.addEventListener("click", async e => {
+            e.stopPropagation();
+            await saveCategories();
+            await savePerformers();
+            playNext();
+          });
+          performersPanel.appendChild(validateBtn);
+        }
+
+        // Adjust size
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => adjustPanelSize(performersPanel, '.perf-badge'));
+        });
+      }
+
+      function createPerfBadge(name, info, isActive) {
+        const badge = document.createElement("span");
+        badge.className = "perf-badge" + (isActive ? " active" : " inactive");
+        badge.dataset.name = name;
+
+        if (info?.avatar) {
+          const img = document.createElement("img");
+          img.src = info.avatar;
+          img.alt = name;
+          img.draggable = false;
+          badge.appendChild(img);
+        }
+
+        return badge;
+      }
+
+      function setupPerfLongPress(element, name, info) {
+        let timer = null;
+        element.addEventListener("touchstart", () => {
+          timer = setTimeout(() => showPerfLinksPopup(name, info), 500);
+        }, { passive: true });
+        element.addEventListener("touchend", () => clearTimeout(timer));
+        element.addEventListener("touchmove", () => clearTimeout(timer));
+      }
+
+      function showPerfLinksPopup(name, info) {
+        // Remove any existing popup
+        closePerfLinksPopup();
+
+        const backdrop = document.createElement("div");
+        backdrop.className = "perf-links-backdrop";
+        backdrop.id = "perfLinksBackdrop";
+        backdrop.addEventListener("click", closePerfLinksPopup);
+
+        const popup = document.createElement("div");
+        popup.className = "perf-links-popup";
+        popup.id = "perfLinksPopup";
+
+        // Header with avatar and name
+        const header = document.createElement("div");
+        header.className = "perf-popup-header";
+        if (info?.avatar) {
+          const img = document.createElement("img");
+          img.src = info.avatar;
+          img.alt = name;
+          header.appendChild(img);
+        }
+        const nameEl = document.createElement("span");
+        nameEl.className = "name";
+        nameEl.textContent = name;
+        header.appendChild(nameEl);
+        popup.appendChild(header);
+
+        // Links
+        const urls = info?.urls || [];
+        if (urls.length > 0) {
+          for (const url of urls) {
+            const a = document.createElement("a");
+            a.href = url;
+            a.target = "_blank";
+            a.rel = "noopener";
+            // Show domain as text
+            try { a.textContent = new URL(url).hostname + new URL(url).pathname; }
+            catch { a.textContent = url; }
+            popup.appendChild(a);
+          }
+        } else {
+          const p = document.createElement("p");
+          p.style.color = "#666";
+          p.textContent = "No links available";
+          popup.appendChild(p);
+        }
+
+        // Close button
+        const closeBtn = document.createElement("button");
+        closeBtn.className = "close-btn";
+        closeBtn.textContent = "✕";
+        closeBtn.addEventListener("click", closePerfLinksPopup);
+        popup.appendChild(closeBtn);
+
+        document.body.appendChild(backdrop);
+        document.body.appendChild(popup);
+      }
+
+      function closePerfLinksPopup() {
+        document.getElementById("perfLinksBackdrop")?.remove();
+        document.getElementById("perfLinksPopup")?.remove();
+      }
+
+      function showPerformersPanel() {
+        if (!isAuthenticated()) return;
+        if (Object.keys(getAllPerformers()).length === 0) return;
+        updatePerformersPanel();
+        performersPanel.classList.add("visible");
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => adjustPanelSize(performersPanel, '.perf-badge'));
+        });
+      }
+
+      function hidePerformersPanel() {
+        pendingPerformers = null;
+        performersPanel.classList.remove("visible");
+      }
+
+      async function savePerformers() {
+        if (!pendingPerformers) return;
+
+        const videoId = currentVideoId;
+        if (!videoId) return;
+
+        try {
+          await fetch(basePath() + `/video/${encodeURIComponent(videoId)}/performers`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ performers: pendingPerformers })
+          });
+          currentVideoPerformers = [...pendingPerformers];
+          pendingPerformers = null;
+        } catch (e) {
+          console.error("Failed to save performers:", e);
+        }
+      }
+
+      // ---- End Performers Panel ----
+
       function showPoster(url) {
         posterLayer.style.backgroundImage = `url(${url})`;
         posterLayer.offsetHeight;
@@ -670,9 +1116,14 @@
         toaster.classList.remove("visible")
       }
       
+      let flashToasterTimer = null;
       function flashToaster(text) {
+        if (flashToasterTimer) clearTimeout(flashToasterTimer);
         displayToaster(text);
-        setTimeout(() => flushToaster(text), 1000);
+        flashToasterTimer = setTimeout(() => {
+          flushToaster(text);
+          flashToasterTimer = null;
+        }, 1000);
       }
 
       async function playNext() {
@@ -683,30 +1134,44 @@
         const item = playlist[index++];
         if (!item) return;
 
-        // Remember if panel was visible
-        const panelWasVisible = categoriesPanel.classList.contains("visible");
+        // Remember if panels were visible
+        const catPanelWasVisible = categoriesPanel.classList.contains("visible");
+        const perfPanelWasVisible = performersPanel.classList.contains("visible");
 
         // Store current video info
         currentVideoId = item.id;
         currentVideoCats = item.cats || {};
+        currentVideoPerformers = item.performers || [];
         pendingCats = {};
+        pendingPerformers = null;
 
-        // Update panel if it was visible (keep it open for fast tagging)
-        if (panelWasVisible) {
+        // Update panels if they were visible (keep open for fast tagging)
+        if (catPanelWasVisible) {
           updateCategoriesPanel();
         }
+        if (perfPanelWasVisible) {
+          updatePerformersPanel();
+        }
+
+        // Update performer indicator
+        updatePerformerIndicator();
 
         timelineProgress.style.width = "0%";
         showPoster(item.poster);
         video.src = item.url;
         video.load();
 
+        // Remove any stale error handler before adding a new one
+        if (video._errorHandler) {
+          video.removeEventListener("error", video._errorHandler);
+        }
         const handleError = () => {
           console.warn("Video error, skipping...");
           video.removeEventListener("error", handleError);
+          video._errorHandler = null;
           playNext();
         };
-
+        video._errorHandler = handleError;
         video.addEventListener("error", handleError);
 
         video.onloadeddata = () => {
@@ -717,21 +1182,7 @@
       }
 
       await fetchPlaylist();
-
-      const firstItem = playlist[index++];
-      if (firstItem) {
-        currentVideoId = firstItem.id;
-        currentVideoCats = firstItem.cats || {};
-        showPoster(firstItem.poster);
-        video.src = firstItem.url;
-        video.load();
-      }
-
-      video.onloadeddata = () => {
-        const next = playlist[index];
-        hidePoster(next?.poster);
-        video.play();
-      };
+      await playNext();
 
       video.addEventListener("timeupdate", () => {
         if (video.duration) {
@@ -743,9 +1194,9 @@
       video.addEventListener("ended", () => {
         timelineProgress.style.width = "0%";
         
-        // Only admin can edit categories, so only admin needs looping
-        // to save changes before moving to next video
-        if (categoriesPanel.classList.contains("visible") && canEditCategories()) {
+        // Admin: loop video if any edit panel is open
+        const anyPanelOpen = categoriesPanel.classList.contains("visible") || performersPanel.classList.contains("visible");
+        if (anyPanelOpen && canEditCategories()) {
           video.currentTime = 0;
           video.play();
           return;
@@ -774,21 +1225,33 @@
 
         resistance: 0.2,
 
-        onMove({ dx, dy, distance }) {
+        onMove({ dx, dy, distance, quadrant }) {
           wrapper.style.transform = `translate(${dx}px, ${dy}px)`;
-          // Track if panel was visible when swipe started
+          // Track initial panel states
           if (wrapper.dataset.panelWasVisible === undefined || wrapper.dataset.panelWasVisible === "") {
             wrapper.dataset.panelWasVisible = categoriesPanel.classList.contains("visible") ? "true" : "false";
+            wrapper.dataset.perfPanelWasVisible = performersPanel.classList.contains("visible") ? "true" : "false";
           }
-          // Pull down the categories panel proportionally
-          if (dy > 0 && wrapper.dataset.panelWasVisible !== "true") {
-            const panelOffset = Math.min(dy * 2, categoriesPanel.offsetHeight || 60);
-            categoriesPanel.style.transform = `translateY(calc(-100% + ${panelOffset}px))`;
+          // Pull panel proportionally during swipe down
+          if (dy > 0) {
+            const isLeft = quadrant === "tl" || quadrant === "bl";
+            if (canEditCategories() && isLeft && wrapper.dataset.perfPanelWasVisible !== "true") {
+              // Admin swipe left half → performers panel (from bottom)
+              const perfHeight = performersPanel.offsetHeight || 60;
+              const perfOffset = Math.min(dy * 2, perfHeight);
+              performersPanel.style.transform = `translateY(calc(100% - ${perfOffset}px))`;
+            } else if (wrapper.dataset.panelWasVisible !== "true") {
+              // Right half (admin) or any side (non-admin) → categories panel (from top)
+              const catHeight = categoriesPanel.offsetHeight || 60;
+              const catOffset = Math.min(dy * 2, catHeight);
+              categoriesPanel.style.transform = `translateY(calc(-100% + ${catOffset}px))`;
+            }
           }
         },
 
-        onDetect({ direction, distance }) {
+        onDetect({ direction, distance, quadrant }) {
           wrapper.dataset.swipe = direction;
+          wrapper.dataset.swipeQuadrant = quadrant;
           switch (direction) {
             case "up-right":
             case "up-left":
@@ -810,18 +1273,29 @@
             case "up":
               displayToaster("⏭️");
               break;
-            case "down":
-              // Toggle panel
-              if (categoriesPanel.classList.contains("visible")) {
-                // Will hide on onEnd
+            case "down": {
+              const isLeft = quadrant === "tl" || quadrant === "bl";
+              if (canEditCategories() && isLeft) {
+                // Admin left half → performers
+                if (performersPanel.classList.contains("visible")) {
+                  // Will hide on onEnd
+                } else {
+                  showPerformersPanel();
+                }
               } else {
-                showCategoriesPanel();
+                // Right half (admin) or any side (non-admin) → categories
+                if (categoriesPanel.classList.contains("visible")) {
+                  // Will hide on onEnd
+                } else {
+                  showCategoriesPanel();
+                }
               }
               break;
+            }
           }
         },
 
-        onEnd({ direction }) {
+        onEnd({ direction, distance, duration, quadrant }) {
           switch (direction) {
             case "up-right":
             case "up-left":
@@ -847,18 +1321,29 @@
               video.playbackRate = 1;
               flashToaster("▶️");
               break;
-            case "down":
-              // Toggle: if was visible before swipe, hide it
-              if (wrapper.dataset.panelWasVisible === "true") {
-                hideCategoriesPanel();
+            case "down": {
+              const isLeft = quadrant === "tl" || quadrant === "bl";
+              if (canEditCategories() && isLeft) {
+                // Admin left half → toggle performers panel
+                if (wrapper.dataset.perfPanelWasVisible === "true") {
+                  hidePerformersPanel();
+                }
+              } else {
+                // Right half (admin) or any side (non-admin) → toggle categories panel
+                if (wrapper.dataset.panelWasVisible === "true") {
+                  hideCategoriesPanel();
+                }
               }
-              // else panel stays visible (was just shown)
               break;
+            }
           }
           wrapper.style.transform = "";
           wrapper.dataset.swipe = "";
+          wrapper.dataset.swipeQuadrant = "";
           wrapper.dataset.panelWasVisible = "";
+          wrapper.dataset.perfPanelWasVisible = "";
           categoriesPanel.style.transform = "";
+          performersPanel.style.transform = "";
         },
 
         onCancel() {
@@ -883,13 +1368,24 @@
               video.playbackRate = 1;
               flashToaster("▶️");
               break;
-            case "down":
-              hideCategoriesPanel();
+            case "down": {
+              const q = wrapper.dataset.swipeQuadrant;
+              const isLeft = q === "tl" || q === "bl";
+              if (canEditCategories() && isLeft) {
+                hidePerformersPanel();
+              } else {
+                hideCategoriesPanel();
+              }
               break;
+            }
           }
           wrapper.style.transform = "";
           wrapper.dataset.swipe = "";
+          wrapper.dataset.swipeQuadrant = "";
+          wrapper.dataset.panelWasVisible = "";
+          wrapper.dataset.perfPanelWasVisible = "";
           categoriesPanel.style.transform = "";
+          performersPanel.style.transform = "";
         }
       });
     }
@@ -913,10 +1409,13 @@
       }
     })();
 
-    // Resize handler for categories panel - call adjustSize on each visible panel
+    // Resize handler for panels - call adjustSize on each visible panel
     window.addEventListener('resize', () => {
       document.querySelectorAll('.categories-panel.visible').forEach(panel => {
         adjustPanelSize(panel, '.cat-badge');
+      });
+      document.querySelectorAll('.performers-panel.visible').forEach(panel => {
+        adjustPanelSize(panel, '.perf-badge');
       });
     });
     

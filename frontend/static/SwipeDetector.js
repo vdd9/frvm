@@ -27,6 +27,7 @@ class SwipeDetector {
 
     this.active = false;
     this.lockedDirection = null;
+    this.lastDistance = 0;
 
     this.startX = 0;
     this.startY = 0;
@@ -55,9 +56,19 @@ class SwipeDetector {
 
     this.active = true;
     this.lockedDirection = null;
+    this.lastDistance = 0;
+    this.startTime = Date.now();
 
     this.startX = e.clientX;
     this.startY = e.clientY;
+
+    // Determine start quadrant relative to element
+    const rect = this.el.getBoundingClientRect();
+    const relX = e.clientX - rect.left;
+    const relY = e.clientY - rect.top;
+    const halfW = rect.width / 2;
+    const halfH = rect.height / 2;
+    this.startQuadrant = (relY < halfH ? "t" : "b") + (relX < halfW ? "l" : "r");
 
     this.el.setPointerCapture(e.pointerId);
   };
@@ -69,12 +80,14 @@ class SwipeDetector {
     const dyRaw = e.clientY - this.startY;
 
     const distance = Math.hypot(dxRaw, dyRaw);
+    this.lastDistance = distance;
 
     // Feedback continu avec inertie
     this.onMove({
       dx: dxRaw * this.resistance,
       dy: dyRaw * this.resistance,
       distance,
+      quadrant: this.startQuadrant,
       event: e
     });
 
@@ -89,6 +102,8 @@ class SwipeDetector {
     this.onDetect({
       direction,
       distance,
+      duration: Date.now() - this.startTime,
+      quadrant: this.startQuadrant,
       dx: dxRaw,
       dy: dyRaw,
       event: e
@@ -104,6 +119,9 @@ class SwipeDetector {
     if (this.lockedDirection) {
       this.onEnd({
         direction: this.lockedDirection,
+        distance: this.lastDistance,
+        duration: Date.now() - this.startTime,
+        quadrant: this.startQuadrant,
         event: e
       });
     } else {

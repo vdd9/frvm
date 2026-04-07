@@ -233,6 +233,67 @@ body { background-size:cover; background-position:center; background-repeat:no-r
   margin-bottom: 4px;
 }
 
+/* Performer suggestion dropdown */
+.perf-suggestions {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 100%;
+  background: #222;
+  border: 1px solid #555;
+  border-radius: 0 0 8px 8px;
+  max-height: 200px;
+  overflow-y: auto;
+  z-index: 100;
+  display: none;
+}
+.perf-suggestions.visible { display: block; }
+.perf-suggestion {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  cursor: pointer;
+  color: #ccc;
+  font-size: 0.9em;
+}
+.perf-suggestion:hover { background: #333; }
+.perf-suggestion img {
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  object-fit: cover;
+}
+
+/* Performer palette */
+.perf-palette {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  justify-content: center;
+  margin-top: 6px;
+}
+.perf-palette-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  background: rgba(50, 50, 50, 0.8);
+  border: 1px solid #444;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s;
+  color: #ccc;
+  font-size: 0.85em;
+}
+.perf-palette-btn:hover { background: rgba(80, 80, 80, 0.8); }
+.perf-palette-btn img {
+  width: 24px;
+  height: 24px;
+  border-radius: 4px;
+  object-fit: cover;
+}
+
 /* Compact emoji palette when too many lines */
 .emoji-palette.compact .emoji-btn {
   font-size: 1.3em;
@@ -441,6 +502,7 @@ body { background-size:cover; background-position:center; background-repeat:no-r
   <div class="preset-row" id="presetRow"></div>
   <div class="search-input-row">
     <input type="text" class="search-input" id="searchExpr" placeholder="" autocomplete="off">
+    <div class="perf-suggestions" id="perfSuggestions"></div>
     <div class="operator-btns">
       <button class="op-btn" onclick="insertOp('.')">. AND</button>
       <button class="op-btn" onclick="insertOp('+')">+ OR</button>
@@ -452,6 +514,7 @@ body { background-size:cover; background-position:center; background-repeat:no-r
     <button class="search-btn" onclick="applySearch()">Go</button>
   </div>
   <div class="emoji-palette" id="emojiPalette"></div>
+  <div class="perf-palette" id="perfPalette"></div>
   <div class="video-counter" id="videoCounter">
     <span class="count-item"><span class="icon">📱</span> Portrait: <span class="num" id="countPortrait">-</span></span>
     <span class="count-item"><span class="icon">⬛</span> Square: <span class="num" id="countSquare">-</span></span>
@@ -580,6 +643,8 @@ function showMainUI() {
   document.getElementById('searchExpr').placeholder = generateDynamicPlaceholder();
   applyBackgrounds(currentUser.role);
   buildEmojiPalette();
+  buildPerformerPalette();
+  setupPerfAutocomplete();
   buildPresetButtons();
   updateVideoCounts();
   renderGrid();
@@ -804,6 +869,97 @@ function buildEmojiPalette() {
   
   // Check if palette needs compacting
   requestAnimationFrame(() => adjustPaletteSize());
+}
+
+function buildPerformerPalette() {
+  const palette = document.getElementById('perfPalette');
+  palette.innerHTML = '';
+  const performers = appConfig?.performers || {};
+  if (Object.keys(performers).length === 0) return;
+
+  // "None" button: click = !@ (explicit none), right-click = ?@ (unset/untagged)
+  const noneBtn = document.createElement('button');
+  noneBtn.className = 'perf-palette-btn';
+  noneBtn.textContent = '\u2205 none';
+  noneBtn.onclick = () => insertEmoji('!@');
+  noneBtn.oncontextmenu = (e) => { e.preventDefault(); insertEmoji('?@'); };
+  palette.appendChild(noneBtn);
+
+  for (const [name, info] of Object.entries(performers)) {
+    const btn = document.createElement('button');
+    btn.className = 'perf-palette-btn';
+    if (info.avatar) {
+      const img = document.createElement('img');
+      img.src = info.avatar;
+      img.alt = name;
+      btn.appendChild(img);
+    }
+    const span = document.createElement('span');
+    span.textContent = name;
+    btn.appendChild(span);
+    btn.onclick = () => insertEmoji('@' + name);
+    btn.oncontextmenu = (e) => { e.preventDefault(); insertEmoji('!@' + name); };
+    palette.appendChild(btn);
+  }
+}
+
+function setupPerfAutocomplete() {
+  const input = document.getElementById('searchExpr');
+  const dropdown = document.getElementById('perfSuggestions');
+  const performers = () => appConfig?.performers || {};
+
+  input.addEventListener('input', () => {
+    const val = input.value;
+    const pos = input.selectionStart;
+    // Find the @ before cursor
+    const before = val.slice(0, pos);
+    const atIdx = before.lastIndexOf('@');
+    if (atIdx < 0) { dropdown.classList.remove('visible'); return; }
+    // Check it's not preceded by a letter (part of a name already completed)
+    const partial = before.slice(atIdx + 1);
+    // If there's a completed performer name right after @, don't suggest
+    const allNames = Object.keys(performers());
+    const exactMatch = allNames.find(n => partial === n);
+    if (exactMatch && (pos >= val.length || val[pos] !== '@')) {
+      dropdown.classList.remove('visible'); return;
+    }
+    // Filter performers by partial
+    const matches = allNames.filter(n => n.toLowerCase().startsWith(partial.toLowerCase()));
+    if (matches.length === 0 || (matches.length === 1 && matches[0] === partial)) {
+      dropdown.classList.remove('visible'); return;
+    }
+    dropdown.innerHTML = '';
+    for (const name of matches) {
+      const item = document.createElement('div');
+      item.className = 'perf-suggestion';
+      const info = performers()[name];
+      if (info?.avatar) {
+        const img = document.createElement('img');
+        img.src = info.avatar;
+        item.appendChild(img);
+      }
+      const span = document.createElement('span');
+      span.textContent = name;
+      item.appendChild(span);
+      item.addEventListener('mousedown', (e) => {
+        e.preventDefault();
+        // Replace partial with full name
+        input.value = val.slice(0, atIdx + 1) + name + val.slice(pos);
+        const newPos = atIdx + 1 + name.length;
+        input.setSelectionRange(newPos, newPos);
+        dropdown.classList.remove('visible');
+        input.focus();
+        updatePresetHighlight();
+        debouncedUpdateCounts();
+      });
+      dropdown.appendChild(item);
+    }
+    dropdown.classList.add('visible');
+  });
+
+  input.addEventListener('blur', () => {
+    setTimeout(() => dropdown.classList.remove('visible'), 150);
+  });
 }
 
 function adjustPaletteSize() {

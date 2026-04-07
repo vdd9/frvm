@@ -7,6 +7,9 @@ Boolean expression parser (electronic logic style):
   +  = OR  
   .  = AND (optional, concatenation implies AND)
   () = grouping
+  @  = performer prefix (e.g. @Sage_bd)
+  !@ = admin explicitly said "no performers" (_none)
+  ?@ = unset performers (admin hasn't tagged yet)
 
 Examples:
   🥗           → videos with 🥗 (yes=1)
@@ -18,33 +21,77 @@ Examples:
   🥗.!👎       → videos with 🥗 and explicitly without 👎
   🥗.?🔥       → videos with 🥗 where 🔥 is unset
   (🥗+🔥).💃   → (🥗 OR 🔥) AND 💃
+  @Sage_bd     → videos with performer Sage_bd
+  🔞.@Sage_bd  → explicit videos with Sage_bd
+  @Sage_bd+@livymae → videos with either performer
+  !@           → videos explicitly marked as having no performers
+  ?@           → videos where performers are unset (not tagged yet)
+  !?@          → videos that have been tagged (either !@ or @someone)
+  🔥.?@        → hot videos not yet tagged for performers
 """
 
 
-def tokenize(expr: str, categories: dict) -> list:
+def tokenize(expr: str, categories: dict, performers: dict = None) -> list:
     """
     Transform expression into tokens.
-    Possible tokens: 'NOT', 'AND', 'OR', '(', ')', ('EMOJI', emoji_str)
+    Possible tokens: 'NOT', 'AND', 'OR', '(', ')', ('EMOJI', emoji_str), ('PERFORMER', name)
     """
+    if performers is None:
+        performers = {}
     tokens = []
     i = 0
     expr = expr.replace(" ", "")  # remove spaces
     
     # Sort emojis by decreasing length
     sorted_emojis = sorted(categories.keys(), key=len, reverse=True)
+    # Sort performer names by decreasing length to match longest first
+    # NOTE: be careful if one performer name is a substring of another (e.g. "mae" vs "livymae")
+    sorted_performers = sorted(performers.keys(), key=len, reverse=True)
     
     while i < len(expr):
         c = expr[i]
         
         if c == '!':
-            # Implicit AND before NOT if previous token is EMOJI or )
-            if tokens and (isinstance(tokens[-1], tuple) or tokens[-1] == ')'):
+            # Check for !@ (bare) = explicit none (admin said "no performers")
+            if i + 1 < len(expr) and expr[i + 1] == '@':
+                rest = expr[i + 2:]
+                is_bare = True
+                for name in sorted_performers:
+                    if name != '_none' and rest.startswith(name):
+                        is_bare = False
+                        break
+                if is_bare:
+                    # !@ alone = EXPLICIT_NONE token
+                    if tokens and (isinstance(tokens[-1], tuple) or tokens[-1] in (')', 'EXPLICIT_NONE', 'UNSET_PERFORMER')):
+                        tokens.append('AND')
+                    tokens.append('EXPLICIT_NONE')
+                    i += 2  # skip !@
+                    continue
+            # Implicit AND before NOT if previous token is a value
+            if tokens and (isinstance(tokens[-1], tuple) or tokens[-1] in (')', 'EXPLICIT_NONE', 'UNSET_PERFORMER')):
                 tokens.append('AND')
             tokens.append('NOT')
             i += 1
         elif c == '?':
-            # Implicit AND before UNSET if previous token is EMOJI or )
-            if tokens and (isinstance(tokens[-1], tuple) or tokens[-1] == ')'):
+            # Check for ?@ = unset performers (not tagged yet)
+            if i + 1 < len(expr) and expr[i + 1] == '@':
+                # But only if NOT followed by a performer name (i.e. ?@ alone or ?@ at end)
+                # If followed by a known performer name, fall through to normal UNSET+@performer
+                rest = expr[i + 2:]
+                is_bare = True
+                for name in sorted_performers:
+                    if name != '_none' and rest.startswith(name):
+                        is_bare = False
+                        break
+                if is_bare:
+                    # ?@ alone = UNSET_PERFORMER token
+                    if tokens and (isinstance(tokens[-1], tuple) or tokens[-1] in (')', 'EXPLICIT_NONE', 'UNSET_PERFORMER')):
+                        tokens.append('AND')
+                    tokens.append('UNSET_PERFORMER')
+                    i += 2  # skip ?@
+                    continue
+            # Implicit AND before UNSET if previous token is a value
+            if tokens and (isinstance(tokens[-1], tuple) or tokens[-1] in (')', 'EXPLICIT_NONE', 'UNSET_PERFORMER')):
                 tokens.append('AND')
             tokens.append('UNSET')
             i += 1
@@ -55,21 +102,36 @@ def tokenize(expr: str, categories: dict) -> list:
             tokens.append('AND')
             i += 1
         elif c == '(':
-            # Implicit AND before ( if previous token is EMOJI or )
-            if tokens and (isinstance(tokens[-1], tuple) or tokens[-1] == ')'):
+            # Implicit AND before ( if previous token is a value
+            if tokens and (isinstance(tokens[-1], tuple) or tokens[-1] in (')', 'EXPLICIT_NONE', 'UNSET_PERFORMER')):
                 tokens.append('AND')
             tokens.append('(')
             i += 1
         elif c == ')':
             tokens.append(')')
             i += 1
+        elif c == '@':
+            # Performer token: @Name
+            # Implicit AND before @ if previous token is a value
+            if tokens and (isinstance(tokens[-1], tuple) or tokens[-1] in (')', 'EXPLICIT_NONE', 'UNSET_PERFORMER')):
+                tokens.append('AND')
+            i += 1  # skip @
+            found = False
+            for name in sorted_performers:
+                if expr[i:].startswith(name):
+                    tokens.append(('PERFORMER', name))
+                    i += len(name)
+                    found = True
+                    break
+            if not found:
+                raise ValueError(f"Unknown performer at position {i}: '@{expr[i:][:20]}'")
         else:
             # Look for an emoji
             found = False
             for emoji in sorted_emojis:
                 if expr[i:].startswith(emoji):
-                    # Implicit AND if previous token is an emoji or )
-                    if tokens and (isinstance(tokens[-1], tuple) or tokens[-1] == ')'):
+                    # Implicit AND if previous token is a value
+                    if tokens and (isinstance(tokens[-1], tuple) or tokens[-1] in (')', 'EXPLICIT_NONE', 'UNSET_PERFORMER')):
                         tokens.append('AND')
                     tokens.append(('EMOJI', emoji))
                     i += len(emoji)
@@ -85,10 +147,11 @@ def tokenize(expr: str, categories: dict) -> list:
 class Parser:
     """Recursive descent parser for boolean expressions."""
     
-    def __init__(self, tokens: list, categories: dict):
+    def __init__(self, tokens: list, categories: dict, performers: dict = None):
         self.tokens = tokens
         self.pos = 0
         self.categories = categories
+        self.performers = performers or {}
     
     def peek(self):
         if self.pos < len(self.tokens):
@@ -131,13 +194,16 @@ class Parser:
         """expr_not → '!' expr_not | '?' expr_not | atom"""
         if self.peek() == 'NOT':
             self.consume('NOT')
-            # ! before an emoji = look in the "no" bitarray
-            # We need to know if an emoji follows
             token = self.peek()
             if isinstance(token, tuple) and token[0] == 'EMOJI':
                 self.consume()
                 emoji = token[1]
                 return self.categories[emoji]["no"].copy()
+            elif isinstance(token, tuple) and token[0] == 'PERFORMER':
+                # !@performer = videos that do NOT have this performer
+                self.consume()
+                name = token[1]
+                return ~self.performers[name].copy()
             else:
                 # NOT of a sub-expression
                 inner = self.parse_not()
@@ -145,25 +211,27 @@ class Parser:
         
         if self.peek() == 'UNSET':
             self.consume('UNSET')
-            # ? before an emoji = neither yes nor no is set
             token = self.peek()
             if isinstance(token, tuple) and token[0] == 'EMOJI':
                 self.consume()
                 emoji = token[1]
                 yes = self.categories[emoji]["yes"]
                 no = self.categories[emoji]["no"]
-                # UNSET = ~(yes | no) = neither marked yes nor marked no
                 return ~(yes | no)
+            elif isinstance(token, tuple) and token[0] == 'PERFORMER':
+                # ?@performer = videos where this performer status is unset
+                # (semantically same result as !@performer since performers are binary)
+                self.consume()
+                name = token[1]
+                return ~self.performers[name].copy()
             else:
-                # UNSET of a sub-expression doesn't really make sense,
-                # but we'll interpret it as NOT
                 inner = self.parse_not()
                 return ~inner
         
         return self.parse_atom()
     
     def parse_atom(self) -> bitarray:
-        """atom → EMOJI | '(' expr_or ')'"""
+        """atom → EMOJI | PERFORMER | EXPLICIT_NONE | UNSET_PERFORMER | '(' expr_or ')'"""
         token = self.peek()
         
         if token == '(':
@@ -172,27 +240,56 @@ class Parser:
             self.consume(')')
             return result
         
+        if token == 'EXPLICIT_NONE':
+            self.consume()
+            # !@ = admin explicitly marked "no performers" → _none bitarray
+            if "_none" in self.performers:
+                return self.performers["_none"].copy()
+            # Fallback: no _none performer → no videos match
+            n = len(list(self.categories.values())[0]["yes"])
+            result = bitarray(n)
+            result.setall(0)
+            return result
+
+        if token == 'UNSET_PERFORMER':
+            self.consume()
+            # ?@ = unset performers (admin hasn't tagged yet)
+            # = NOT(_none OR any_real_performer)
+            n = len(list(self.categories.values())[0]["yes"])
+            tagged = bitarray(n)
+            tagged.setall(0)
+            for name, bits in self.performers.items():
+                tagged |= bits
+            return ~tagged
+        
         if isinstance(token, tuple) and token[0] == 'EMOJI':
             self.consume()
             emoji = token[1]
             return self.categories[emoji]["yes"].copy()
         
+        if isinstance(token, tuple) and token[0] == 'PERFORMER':
+            self.consume()
+            name = token[1]
+            return self.performers[name].copy()
+        
         raise ValueError(f"Unexpected token: {token}")
 
 
-def evaluate(expr: str, categories: dict) -> bitarray:
+def evaluate(expr: str, categories: dict, performers: dict = None) -> bitarray:
     """
-    Evaluate a boolean expression on categories.
+    Evaluate a boolean expression on categories and performers.
     
     Syntax:
       !  = NOT (before emoji: looks in "no", before expr: inverts)
       +  = OR
       .  = AND (optional, concatenation = implicit AND)
       () = grouping
+      @  = performer (e.g. @Sage_bd)
     
     Args:
-        expr: Expression like "🥗.!👎" or "🔥+💃"
+        expr: Expression like "🥗.!👎" or "🔥+💃" or "@Sage_bd"
         categories: dict[emoji, {"yes": bitarray, "no": bitarray}]
+        performers: dict[name, bitarray] (optional)
     
     Returns:
         bitarray with 1 for each matching video
@@ -203,6 +300,6 @@ def evaluate(expr: str, categories: dict) -> bitarray:
     if not expr.strip():
         raise ValueError("Empty expression")
     
-    tokens = tokenize(expr, categories)
-    parser = Parser(tokens, categories)
+    tokens = tokenize(expr, categories, performers)
+    parser = Parser(tokens, categories, performers)
     return parser.parse()

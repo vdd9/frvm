@@ -14,9 +14,14 @@ ENV/
 *.swp
 *.swo
 
-# Generated thumbnails (except backgrounds)
-sample_app_data/**/*.jpg
+# Generated thumbnails in orientation folders (ffmpeg .jpg per .mp4)
+sample_app_data/landscape/*.jpg
+sample_app_data/portrait/*.jpg
+sample_app_data/square/*.jpg
 !sample_app_data/**/background*.jpg
+
+# Media fragments
+*.m4s
 
 # Logs
 *.log
